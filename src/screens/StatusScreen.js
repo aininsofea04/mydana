@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { COLORS } from '../constants';
 
 export default function StatusScreen({ navigation }) {
@@ -21,12 +21,44 @@ export default function StatusScreen({ navigation }) {
           const userSnap = await getDoc(doc(db, 'users', user.uid));
           if (userSnap.exists()) setUserData(userSnap.data());
         } catch (e) { console.error(e); }
-        unsubApp = onSnapshot(doc(db, 'applications', user.uid), (docSnap) => {
-          if (docSnap.exists()) setAppData({ id: docSnap.id, ...docSnap.data() });
-          else setAppData(null);
+
+        // Legacy fallback: check for doc with ID == user.uid
+        const legacyRef = doc(db, 'applications', user.uid);
+        const legacySnap = await getDoc(legacyRef);
+
+        // Query all applications for this user (New system)
+        const q = query(
+          collection(db, 'applications'),
+          where('userId', '==', user.uid)
+        );
+
+        unsubApp = onSnapshot(q, (snap) => {
+          let list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          
+          // Add legacy if exists and not already in list
+          if (legacySnap.exists()) {
+            const legacyData = { id: legacySnap.id, ...legacySnap.data() };
+            if (!list.find(a => a.id === legacyData.id)) {
+              list.push(legacyData);
+            }
+          }
+
+          // Local sort by createdAt desc
+          list.sort((a, b) => {
+            const dateA = a.createdAt?.seconds || 0;
+            const dateB = b.createdAt?.seconds || 0;
+            return dateB - dateA;
+          });
+
+          setAppData(list);
+          setLoading(false);
+        }, (err) => {
+          console.error(err);
           setLoading(false);
         });
-      } else { setLoading(false); }
+      } else { 
+        setLoading(false); 
+      }
     });
     return () => { unsubAuth(); if (unsubApp) unsubApp(); };
   }, []);
@@ -82,114 +114,75 @@ export default function StatusScreen({ navigation }) {
   }
 
   const displayName = userData?.nama || user?.displayName || user?.email?.split('@')[0] || 'Pemohon';
-  const createdDate = appData.createdAt?.toDate ? appData.createdAt.toDate() : new Date();
-  const dateStr = createdDate.toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
-  const timeStr = createdDate.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' });
-  const status = appData.status || 'pending';
-  const score = appData.score || 0;
-  const docs = appData.documents || [];
 
-  const statusConfig = {
-    approved: { label: 'Diluluskan', color: COLORS.success, bg: COLORS.successBg, icon: 'checkmark-circle' },
-    rejected: { label: 'Ditolak', color: COLORS.error, bg: COLORS.errorBg, icon: 'close-circle' },
-    pending: { label: 'Dalam Semakan', color: COLORS.secondary, bg: '#e0f2fe', icon: 'time' },
+  const renderStatusCard = (app) => {
+    const createdDate = app.createdAt?.toDate ? app.createdAt.toDate() : new Date();
+    const dateStr = createdDate.toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
+    const status = app.status || 'pending';
+    
+    const statusConfig = {
+      approved: { label: 'Diluluskan', color: COLORS.success, bg: COLORS.successBg, icon: 'checkmark-circle' },
+      rejected: { label: 'Ditolak', color: COLORS.error, bg: COLORS.errorBg, icon: 'close-circle' },
+      pending: { label: 'Dalam Semakan', color: COLORS.secondary, bg: '#e0f2fe', icon: 'time' },
+    };
+    const sc = statusConfig[status] || statusConfig.pending;
+
+    return (
+      <View key={app.id} style={styles.card}>
+        <View style={styles.appHeader}>
+          <Text style={styles.appTitle}>{app.summary?.tajuk || 'Permohonan Dana'}</Text>
+          <View style={[styles.statusBadgeSmall, { backgroundColor: sc.bg }]}>
+            <Text style={[styles.statusLabelSmall, { color: sc.color }]}>{sc.label}</Text>
+          </View>
+        </View>
+        
+        <View style={styles.detailItem}>
+          <Text style={styles.detailLabel}>TARIKH: {dateStr}</Text>
+        </View>
+
+        {status === 'approved' && (
+          <TouchableOpacity 
+            style={styles.createBtn} 
+            onPress={() => navigation.navigate('CreateFeed', { appId: app.id })}
+          >
+            <Ionicons name="images-outline" size={18} color="#fff" />
+            <Text style={styles.createBtnText}>
+              {app.isPublished ? 'Kemaskini Kandungan' : 'Cipta Kandungan Kempen'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {status === 'rejected' && (
+          <Text style={styles.rejectReason}>Alasan: {app.reason || 'Tiada alasan diberikan.'}</Text>
+        )}
+      </View>
+    );
   };
-  const sc = statusConfig[status] || statusConfig.pending;
-
-  const timelineSteps = [
-    { label: 'Permohonan Dihantar', desc: `${dateStr}, ${timeStr}` },
-    { label: 'Semakan Dokumen', desc: 'Sedang dijalankan' },
-    { label: 'Temu Bual (Jika Perlu)', desc: 'Menunggu keputusan' },
-    { label: 'Keputusan Akhir', desc: status === 'approved' ? 'Diluluskan!' : status === 'rejected' ? `Ditolak: ${appData.reason || '-'}` : 'Menunggu' },
-  ];
-  const currentStep = status === 'approved' || status === 'rejected' ? 4 : 2;
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
       <View style={styles.headerBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Status Permohonan</Text>
+        <Text style={styles.headerTitle}>Inbox Permohonan</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Profile Card */}
-        <View style={styles.card}>
-          <View style={styles.profileRow}>
-            <View style={styles.profileAvatar}>
-              <Ionicons name="person" size={24} color={COLORS.textMuted} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.profileName}>{displayName}</Text>
-              <Text style={styles.profileId}>ID: MYD-{user.uid.substring(0, 5).toUpperCase()}</Text>
-            </View>
-          </View>
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeText}>Hai, {displayName}</Text>
+          <Text style={styles.welcomeSubtext}>Berikut adalah senarai permohonan anda.</Text>
         </View>
 
-        {/* Status Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Status Semasa</Text>
-          <View style={[styles.statusBadge, { backgroundColor: sc.bg }]}>
-            <Ionicons name={sc.icon} size={20} color={sc.color} />
-            <Text style={[styles.statusLabel, { color: sc.color }]}>{sc.label}</Text>
+        {appData.length > 0 ? (
+          appData.map(renderStatusCard)
+        ) : (
+          <View style={styles.emptyCenter}>
+            <Ionicons name="document-text-outline" size={50} color={COLORS.border} />
+            <Text style={styles.emptyText}>Tiada permohonan ditemui.</Text>
           </View>
-          <View style={styles.detailRow}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>SKOR AI</Text>
-              <Text style={styles.detailValue}>{score}%</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>TARIKH</Text>
-              <Text style={styles.detailValue}>{dateStr}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Timeline */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Jejak Permohonan</Text>
-          {timelineSteps.map((step, i) => {
-            const completed = i < currentStep;
-            const active = i === currentStep - 1;
-            return (
-              <View key={i} style={styles.timelineItem}>
-                <View style={styles.timelineLeft}>
-                  <View style={[styles.timelineDot, completed && styles.timelineDotDone, active && styles.timelineDotActive]}>
-                    {completed ? (
-                      <Ionicons name="checkmark" size={12} color="#fff" />
-                    ) : (
-                      <Text style={styles.timelineNum}>{i + 1}</Text>
-                    )}
-                  </View>
-                  {i < timelineSteps.length - 1 && (
-                    <View style={[styles.timelineLine, completed && styles.timelineLineDone]} />
-                  )}
-                </View>
-                <View style={styles.timelineContent}>
-                  <Text style={[styles.timelineLabel, completed && { color: COLORS.text }]}>{step.label}</Text>
-                  <Text style={styles.timelineDesc}>{step.desc}</Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Documents */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Dokumen Sokongan</Text>
-          {docs.length > 0 ? docs.map((d, i) => (
-            <TouchableOpacity key={i} style={styles.docItem} onPress={() => Linking.openURL(d.url)}>
-              <Feather name="file-text" size={18} color={COLORS.primary} />
-              <Text style={styles.docName} numberOfLines={1}>{d.name}</Text>
-              <Feather name="external-link" size={14} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          )) : (
-            <Text style={styles.emptyDocText}>Tiada dokumen dimuat naik.</Text>
-          )}
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -249,6 +242,20 @@ const styles = StyleSheet.create({
   },
   docName: { flex: 1, fontSize: 14, fontWeight: '500', color: COLORS.primary },
   emptyDocText: { fontSize: 14, color: COLORS.textMuted, fontStyle: 'italic' },
+  welcomeSection: { marginBottom: 20 },
+  welcomeText: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+  welcomeSubtext: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
+  appHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  appTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text, flex: 1 },
+  statusBadgeSmall: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  statusLabelSmall: { fontSize: 11, fontWeight: '700' },
+  rejectReason: { marginTop: 10, fontSize: 13, color: COLORS.error, fontStyle: 'italic' },
+  emptyCenter: { alignItems: 'center', marginTop: 50 },
   btnPrimary: { backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 14 },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  createBtn: {
+    backgroundColor: COLORS.success, paddingVertical: 12, borderRadius: 12,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16,
+  },
+  createBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 });

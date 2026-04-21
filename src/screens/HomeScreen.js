@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { COLORS, ADMIN_EMAIL } from '../constants';
+import { COLORS } from '../constants';
 
 export default function HomeScreen({ navigation }) {
   const [currentUser, setCurrentUser] = useState(null);
@@ -14,13 +15,9 @@ export default function HomeScreen({ navigation }) {
     const unsub = auth.onAuthStateChanged((u) => setCurrentUser(u));
     return unsub;
   }, []);
-
   const handleLogout = async () => {
     await signOut(auth);
   };
-
-  const isAdmin = currentUser?.email === ADMIN_EMAIL;
-
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -97,7 +94,6 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.quickLinks}>
             <Text style={styles.quickTitle}>Menu Pantas</Text>
             <View style={styles.quickGrid}>
-              {!isAdmin && (
                 <>
                   <TouchableOpacity style={styles.quickCard} onPress={() => navigation.navigate('Chat')}>
                     <Ionicons name="chatbubble-ellipses" size={24} color={COLORS.primary} />
@@ -112,13 +108,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.quickLabel}>Kempen</Text>
                   </TouchableOpacity>
                 </>
-              )}
-              {isAdmin && (
-                <TouchableOpacity style={[styles.quickCard, { flex: 1 }]} onPress={() => navigation.navigate('Admin')}>
-                  <Ionicons name="shield-checkmark" size={24} color={COLORS.textSecondary} />
-                  <Text style={styles.quickLabel}>Admin Panel</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </View>
         )}

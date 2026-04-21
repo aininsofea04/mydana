@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView,
-  FlatList, Alert, TextInput, Modal, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  FlatList, Alert, TextInput, Modal, ActivityIndicator, Linking,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { db, auth } from '../firebase';
 import { collection, getDocs, orderBy, query, updateDoc, doc } from 'firebase/firestore';
@@ -14,7 +16,15 @@ export default function AdminScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [rejectId, setRejectId] = useState(null);
+   const [rejectId, setRejectId] = useState(null);
+ 
+   const handleLogout = async () => {
+     try {
+       await auth.signOut();
+     } catch (e) {
+       Alert.alert('Ralat', 'Gagal log keluar.');
+     }
+   };
 
   // Auth guard
   const user = auth.currentUser;
@@ -33,6 +43,7 @@ export default function AdminScreen({ navigation }) {
             id: d.id, name: data.name || 'Pemohon', category: data.category || 'Umum',
             date: dt.toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }),
             score: data.score || 0, scoreClass: data.scoreClass || 'low',
+            summary: data.summary || {}, aiAnalysis: data.aiAnalysis || {},
             transcript: data.transcript || [], documents: data.documents || [],
             status: data.status || 'pending', reason: data.reason || '',
           };
@@ -142,6 +153,37 @@ export default function AdminScreen({ navigation }) {
             <Text style={[styles.scoreVerdict, { color: getScoreColor(selectedApp.scoreClass) }]}>
               {selectedApp.score >= 80 ? '✅ Sangat Tinggi' : selectedApp.score > 60 ? '⚠️ Sederhana' : '❌ Rendah'}
             </Text>
+            {selectedApp.aiAnalysis?.sebab && (
+              <View style={styles.aiReasonBox}>
+                <Text style={styles.aiReasonTitle}>Sebab Skor (Analisis AI):</Text>
+                <Text style={styles.aiReasonText}>{selectedApp.aiAnalysis.sebab}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Summary */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Rumusan Permohonan</Text>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Tajuk</Text>
+              <Text style={styles.summaryValue}>{selectedApp.summary?.tajuk || selectedApp.name}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Lokasi</Text>
+              <Text style={styles.summaryValue}>{selectedApp.summary?.lokasi || 'N/A'}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Sebab</Text>
+              <Text style={styles.summaryValue}>{selectedApp.summary?.sebab || 'N/A'}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Jumlah Dana</Text>
+              <Text style={styles.summaryValue}>{selectedApp.summary?.dana || 'N/A'}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Info Bank</Text>
+              <Text style={styles.summaryValue}>{selectedApp.summary?.bank || 'N/A'}</Text>
+            </View>
           </View>
 
           {/* Actions */}
@@ -173,9 +215,17 @@ export default function AdminScreen({ navigation }) {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Dokumen Sokongan</Text>
               {selectedApp.documents.map((d, i) => (
-                <TouchableOpacity key={i} style={styles.docItem}>
-                  <Feather name="file-text" size={16} color={COLORS.primary} />
-                  <Text style={styles.docName}>{d.name}</Text>
+                <TouchableOpacity key={i} style={styles.docItem} onPress={() => Linking.openURL(d.url)}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Feather name="file-text" size={16} color={COLORS.primary} />
+                      <Text style={styles.docName}>{d.name}</Text>
+                    </View>
+                    {d.aiDescription && (
+                      <Text style={styles.aiDocDesc}>🔍 AI: {d.aiDescription}</Text>
+                    )}
+                  </View>
+                  <Ionicons name="external-link" size={14} color={COLORS.textMuted} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -193,29 +243,34 @@ export default function AdminScreen({ navigation }) {
           </View>
         </ScrollView>
 
-        {/* Reject Modal */}
-        <Modal visible={rejectModalVisible} transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Alasan Penolakan</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Nyatakan alasan..."
-                placeholderTextColor={COLORS.textMuted}
-                value={rejectReason}
-                onChangeText={setRejectReason}
-                multiline
-              />
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => setRejectModalVisible(false)}>
-                  <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Batal</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalConfirm} onPress={confirmReject}>
-                  <Text style={{ color: '#fff', fontWeight: '700' }}>Tolak</Text>
-                </TouchableOpacity>
+        <Modal visible={rejectModalVisible} transparent animationType="fade">
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Alasan Penolakan</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Nyatakan alasan..."
+                  placeholderTextColor={COLORS.textMuted}
+                  value={rejectReason}
+                  onChangeText={setRejectReason}
+                  multiline
+                  autoFocus
+                />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity style={styles.modalCancel} onPress={() => setRejectModalVisible(false)}>
+                    <Text style={{ color: COLORS.textSecondary, fontWeight: '600' }}>Batal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalConfirm} onPress={confirmReject}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Tolak</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </SafeAreaView>
     );
@@ -225,8 +280,8 @@ export default function AdminScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.headerBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+        <TouchableOpacity onPress={handleLogout}>
+          <Feather name="log-out" size={20} color={COLORS.error} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Panel Pentadbir</Text>
         <View style={{ width: 24 }} />
@@ -398,11 +453,11 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 14 },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', paddingHorizontal: 20,
   },
   modalCard: {
-    backgroundColor: COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 24, paddingBottom: 36,
+    backgroundColor: COLORS.surface, borderRadius: 20,
+    padding: 24,
   },
   modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, marginBottom: 14 },
   modalInput: {
@@ -415,4 +470,13 @@ const styles = StyleSheet.create({
   modalConfirm: {
     backgroundColor: COLORS.error, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10,
   },
+  aiReasonBox: {
+    backgroundColor: COLORS.borderLight, padding: 12, borderRadius: 10, marginTop: 16,
+  },
+  aiReasonTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 4 },
+  aiReasonText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+  summaryItem: { marginBottom: 12 },
+  summaryLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted, marginBottom: 2 },
+  summaryValue: { fontSize: 14, color: COLORS.text, fontWeight: '500' },
+  aiDocDesc: { fontSize: 11, color: COLORS.textSecondary, fontStyle: 'italic', marginTop: 4, marginLeft: 24 },
 });

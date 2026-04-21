@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
+  Image, ScrollView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, auth, storage } from '../firebase';
 import { collection, addDoc, doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { COLORS, SYSTEM_PROMPT, callGroqAPI } from '../constants';
+import { COLORS, SYSTEM_PROMPT, callGroqAPI, analyzeApplication } from '../constants';
 
 const INITIAL_MSG = {
   id: '1', sender: 'bot', name: 'Pembantu AI MyDana',
@@ -25,15 +27,18 @@ export default function ChatScreen({ navigation }) {
   const [uploadedDocs, setUploadedDocs] = useState([]);
   const [existingApp, setExistingApp] = useState(null);
   const [checkingApp, setCheckingApp] = useState(true);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const flatListRef = useRef(null);
 
   // Load saved session
   useEffect(() => {
     const load = async () => {
+      if (!auth.currentUser) return;
       try {
-        const saved = await AsyncStorage.getItem('mydana_chat_session');
+        const uid = auth.currentUser.uid;
+        const saved = await AsyncStorage.getItem(`mydana_chat_session_${uid}`);
         if (saved) setMessages(JSON.parse(saved));
-        const docs = await AsyncStorage.getItem('mydana_docs');
+        const docs = await AsyncStorage.getItem(`mydana_docs_${uid}`);
         if (docs) setUploadedDocs(JSON.parse(docs));
       } catch (e) { console.error(e); }
     };
@@ -56,8 +61,11 @@ export default function ChatScreen({ navigation }) {
 
   // Auto-save chat
   useEffect(() => {
-    AsyncStorage.setItem('mydana_chat_session', JSON.stringify(messages));
-    AsyncStorage.setItem('mydana_docs', JSON.stringify(uploadedDocs));
+    if (auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      AsyncStorage.setItem(`mydana_chat_session_${uid}`, JSON.stringify(messages));
+      AsyncStorage.setItem(`mydana_docs_${uid}`, JSON.stringify(uploadedDocs));
+    }
   }, [messages, uploadedDocs]);
 
   // Auth check
@@ -87,68 +95,65 @@ export default function ChatScreen({ navigation }) {
     );
   }
 
-  // Existing application states
-  if (existingApp) {
-    const status = existingApp.status || 'pending';
-    let icon, color, title, desc, bgColor;
-    if (status === 'approved') {
-      icon = 'checkmark-circle'; color = COLORS.success; bgColor = COLORS.successBg;
-      title = 'Permohonan Diluluskan!';
-      desc = 'Tahniah! Permohonan anda telah diluluskan oleh Panel Pentadbir MyDana.';
-    } else if (status === 'rejected') {
-      icon = 'close-circle'; color = COLORS.error; bgColor = COLORS.errorBg;
-      title = 'Permohonan Ditolak';
-      desc = `Alasan: "${existingApp.reason || '-'}"`;
-    } else {
-      icon = 'time'; color = COLORS.secondary; bgColor = '#e0f2fe';
-      title = 'Sedang Diproses';
-      desc = 'Permohonan anda sedang menunggu semakan pengesahan.';
-    }
-
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <View style={[styles.statusCircle, { backgroundColor: bgColor }]}>
-            <Ionicons name={icon} size={40} color={color} />
-          </View>
-          <Text style={[styles.statusTitle, { color }]}>{title}</Text>
-          <Text style={styles.statusDesc}>{desc}</Text>
-          {status === 'rejected' && (
-            <TouchableOpacity style={styles.btnPrimary} onPress={async () => {
-              Alert.alert('Mohon Semula', 'Padam rekod lama dan buat permohonan baharu?', [
-                { text: 'Batal' },
-                { text: 'Ya', onPress: async () => {
-                  try {
-                    if (auth.currentUser) await deleteDoc(doc(db, 'applications', auth.currentUser.uid));
-                    setExistingApp(null);
-                    await AsyncStorage.multiRemove(['mydana_chat_session', 'mydana_docs']);
-                    setUploadedDocs([]);
-                    setMessages([{ ...INITIAL_MSG, text: 'Selamat datang kembali. Mari mulakan permohonan baru.' }]);
-                  } catch (e) { Alert.alert('Ralat', 'Gagal memadam rekod lama.'); }
-                }},
-              ]);
-            }}>
-              <Text style={styles.btnPrimaryText}>Mohon Semula</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.btnOutline} onPress={() => navigation.goBack()}>
-            <Text style={styles.btnOutlineText}>Kembali</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   // Chat handlers
   const handleSend = async () => {
-    if (!inputText.trim()) return;
-    const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: inputText, role: 'user' };
-    const newMsgs = [...messages, userMsg];
-    setMessages(newMsgs);
-    setInputText('');
+    if (!inputText.trim() && pendingFiles.length === 0) return;
+    
     setIsTyping(true);
+    let currentMsgs = [...messages];
+    let newDocs = [...uploadedDocs];
+
+    // Upload pending files first
+    if (pendingFiles.length > 0) {
+      for (const file of pendingFiles) {
+        try {
+          // Standard way in Expo and React Native to get a blob from local URI
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+
+          const fileName = file.name || `file_${Date.now()}`;
+          const type = file.mimeType || 'application/octet-stream';
+          
+          // Using UID in path to match common security rules
+          const storageRef = ref(storage, `documents/${auth.currentUser.uid}/${Date.now()}_${fileName}`);
+          
+          const metadata = { contentType: type };
+          await uploadBytes(storageRef, blob, metadata);
+          const downloadURL = await getDownloadURL(storageRef);
+
+          // Pengecaman Imej AI (Simulasi berasaskan Metadata & Filename)
+          const imgDesc = await callGroqAPI([
+            { role: 'system', content: 'Anda adalah Pakar Pengecaman Imej. Berikan satu baris penerangan ringkas tentang apa yang mungkin ada dalam fail ini berdasarkan namanya. Contoh: "Dokumen Penyata Bank" atau "Gambar Resit Hospital".' },
+            { role: 'user', content: `Nama fail: ${fileName}` }
+          ]);
+
+          newDocs.push({ name: fileName, url: downloadURL, aiDescription: imgDesc });
+          
+          const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: `[Muat naik berhasil: ${fileName}]`, role: 'user' };
+          currentMsgs.push(userMsg);
+          
+          // Slight delay to avoid Rate Limit
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.error("Upload error", e);
+          Alert.alert('Ralat', `Gagal memproses fail: ${file.name}`);
+        }
+      }
+      setUploadedDocs(newDocs);
+      setPendingFiles([]);
+    }
+
+    if (inputText.trim()) {
+      const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: inputText, role: 'user' };
+      currentMsgs.push(userMsg);
+      setMessages(currentMsgs);
+      setInputText('');
+    } else {
+      setMessages(currentMsgs);
+    }
+
     try {
-      const groqHistory = newMsgs.map(m => ({ role: m.role, content: m.text }));
+      const groqHistory = currentMsgs.map(m => ({ role: m.role, content: m.text }));
       const reply = await callGroqAPI([{ role: 'system', content: SYSTEM_PROMPT }, ...groqHistory]);
       setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Pembantu AI MyDana', text: reply, role: 'assistant' }]);
     } catch (e) {
@@ -161,21 +166,10 @@ export default function ChatScreen({ navigation }) {
 
   const handleFilePick = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'] });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: true });
       if (result.canceled) return;
-      const file = result.assets[0];
-      setIsTyping(true);
-      const userText = `[Dokumen dimuat naik: ${file.name}]`;
-      try {
-        const response = await fetch(file.uri);
-        const blob = await response.blob();
-        const storageRef = ref(storage, `documents/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, blob);
-        const downloadURL = await getDownloadURL(storageRef);
-        setUploadedDocs(prev => [...prev, { name: file.name, url: downloadURL }]);
-      } catch (e) { console.error('Upload error:', e); }
-      await proceedWithChat(userText);
-    } catch (e) { console.error(e); setIsTyping(false); }
+      setPendingFiles(prev => [...prev, ...result.assets]);
+    } catch (e) { console.error(e); }
   };
 
   const handleCamera = async () => {
@@ -183,18 +177,17 @@ export default function ChatScreen({ navigation }) {
     if (!perm.granted) { Alert.alert('Kebenaran Ditolak', 'Sila benarkan akses kamera.'); return; }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
     if (result.canceled) return;
-    setIsTyping(true);
-    const uri = result.assets[0].uri;
-    const fileName = `photo_${Date.now()}.jpg`;
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const storageRef = ref(storage, `documents/${fileName}`);
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
-      setUploadedDocs(prev => [...prev, { name: fileName, url: downloadURL }]);
-    } catch (e) { console.error('Upload error:', e); }
-    await proceedWithChat(`[Gambar diambil: ${fileName}]`);
+    setPendingFiles(prev => [...prev, result.assets[0]]);
+  };
+ 
+  const handleGallery = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+      allowsMultipleSelection: true,
+    });
+    if (result.canceled) return;
+    setPendingFiles(prev => [...prev, ...result.assets]);
   };
 
   const proceedWithChat = async (userText) => {
@@ -215,18 +208,29 @@ export default function ChatScreen({ navigation }) {
       { text: 'Hantar', onPress: async () => {
         setIsTyping(true);
         try {
-          const score = 50 + Math.min(messages.length * 5, 45) + Math.floor(Math.random() * 5);
           const user = auth.currentUser;
+          // REAL AI ANALYSIS
+          const result = await analyzeApplication(messages);
+          
           const appData = {
+            userId: user.uid,
             name: user?.displayName || user?.email?.split('@')[0] || 'Pemohon',
-            category: 'Permohonan Bantuan', score,
-            scoreClass: score >= 80 ? 'high' : score > 60 ? 'medium' : 'low',
-            createdAt: serverTimestamp(), transcript: messages, documents: uploadedDocs,
+            email: user?.email,
+            summary: result.summary,
+            aiAnalysis: result.analysis,
+            score: result.analysis.skor,
+            scoreClass: result.analysis.skor >= 80 ? 'high' : (result.analysis.skor > 60 ? 'medium' : 'low'),
+            createdAt: serverTimestamp(), 
+            transcript: messages, 
+            documents: uploadedDocs,
+            status: 'pending',
           };
-          await setDoc(doc(db, 'applications', user.uid), appData);
+          await addDoc(collection(db, 'applications'), appData);
           setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Sistem', text: 'Tahniah! Permohonan anda telah dihantar kepada Panel Pentadbir MyDana!', role: 'assistant' }]);
-          await AsyncStorage.multiRemove(['mydana_chat_session', 'mydana_docs']);
-          setExistingApp({ ...appData, status: 'pending' });
+          
+          const uid = auth.currentUser.uid;
+          await AsyncStorage.multiRemove([`mydana_chat_session_${uid}`, `mydana_docs_${uid}`]);
+          setExistingApp(appData);
         } catch (e) {
           console.error(e);
           Alert.alert('Ralat', 'Gagal menghantar permohonan.');
@@ -286,10 +290,38 @@ export default function ChatScreen({ navigation }) {
           ) : null}
         />
 
+        {/* Pending Uploads Bar */}
+        {pendingFiles.length > 0 && (
+          <View style={styles.pendingBar}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingScroll}>
+              {pendingFiles.map((f, i) => (
+                <View key={i} style={styles.pendingChip}>
+                  {f.mimeType?.startsWith('image') || f.type === 'image' ? (
+                    <Image source={{ uri: f.uri }} style={styles.pendingThumb} />
+                  ) : (
+                    <View style={styles.pendingFileIcon}>
+                      <Ionicons name="document-text" size={20} color={COLORS.primary} />
+                    </View>
+                  )}
+                  <TouchableOpacity 
+                    style={styles.removePending} 
+                    onPress={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                  >
+                    <Ionicons name="close-circle" size={18} color={COLORS.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Input Bar */}
         <View style={styles.inputBar}>
           <TouchableOpacity style={styles.iconBtn} onPress={handleFilePick}>
             <Feather name="paperclip" size={20} color={COLORS.textMuted} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleGallery}>
+            <Ionicons name="images" size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.iconBtn} onPress={handleCamera}>
             <Feather name="camera" size={20} color={COLORS.textMuted} />
@@ -308,9 +340,16 @@ export default function ChatScreen({ navigation }) {
         </View>
 
         {/* Submit Button */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} activeOpacity={0.85}>
+        <TouchableOpacity 
+          style={[styles.submitBtn, messages.length < 10 && { opacity: 0.5, backgroundColor: COLORS.textMuted }]} 
+          onPress={handleSubmit} 
+          activeOpacity={0.85}
+          disabled={messages.length < 10}
+        >
           <Ionicons name="checkmark-circle" size={20} color="#fff" />
-          <Text style={styles.submitBtnText}>Selesai & Hantar Permohonan</Text>
+          <Text style={styles.submitBtnText}>
+            {messages.length < 10 ? 'Lengkapkan Chat Dahulu' : 'Selesai & Hantar Permohonan'}
+          </Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -380,4 +419,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  pendingBar: { backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border, paddingVertical: 10 },
+  pendingScroll: { paddingHorizontal: 12, gap: 10 },
+  pendingChip: { width: 60, height: 60, borderRadius: 10, backgroundColor: COLORS.borderLight, position: 'relative' },
+  pendingThumb: { width: '100%', height: '100%', borderRadius: 10 },
+  pendingFileIcon: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  removePending: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 },
 });

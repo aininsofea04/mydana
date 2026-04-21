@@ -4,7 +4,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from './src/firebase';
-import { COLORS } from './src/constants';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { COLORS, ADMIN_EMAIL } from './src/constants';
 
 // Import Screens
 import HomeScreen from './src/screens/HomeScreen';
@@ -14,6 +15,9 @@ import MainPageScreen from './src/screens/MainPageScreen'; // Ini adalah 'Kempen
 import ChatScreen from './src/screens/ChatScreen';         // Ini adalah 'Mohon Dana'
 import StatusScreen from './src/screens/StatusScreen';     // Ini boleh jadi 'Inbox/Status'
 import ProfileScreen from './src/screens/ProfileScreen';   // Halaman Profil
+import AdminScreen from './src/screens/AdminScreen';       // Halaman Admin
+import PaymentScreen from './src/screens/PaymentScreen';   // Halaman Bayar
+import CreateFeedScreen from './src/screens/CreateFeedScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -68,22 +72,32 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
+  if (currentUser === undefined) return null; // Atau skrin loading
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {currentUser === null ? (
-          // Jika Belum Login
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        ) : (
-          // Jika Sudah Login - Masuk ke dalam Tab Navigation
-          <Stack.Screen name="MainTabs" component={MyTabs} />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {currentUser === null ? (
+            // Jika Belum Login
+            <>
+              <Stack.Screen name="Home" component={HomeScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          ) : currentUser?.email === ADMIN_EMAIL ? (
+            // Jika Login Sebagai ADMIN
+            <Stack.Screen name="Admin" component={AdminScreen} />
+          ) : (
+            // Jika Login Sebagai PENGGUNA BIASA
+            <>
+              <Stack.Screen name="MainTabs" component={MyTabs} />
+              <Stack.Screen name="Payment" component={PaymentScreen} />
+              <Stack.Screen name="CreateFeed" component={CreateFeedScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
