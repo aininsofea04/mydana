@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "MyDana",
+    "slug": "mydana",
+    "scheme": "mydana",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#3b82f6",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mydana.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#3b82f6"
+      },
+      "package": "com.mydana.app"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset",
+      "expo-web-browser"
+    ]
+  }
+}

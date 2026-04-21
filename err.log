@@ -1,0 +1,13 @@
+PluginError: Failed to resolve plugin for module "expo-asset" relative to "C:\DEGREE FTSM UKM\mydana". Do you have node modules installed?
+PluginError: Failed to resolve plugin for module "expo-asset" relative to "C:\DEGREE FTSM UKM\mydana". Do you have node modules installed?
+    at resolvePluginForModule (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js:96:9)
+    at resolveConfigPluginFunctionWithInfo (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js:145:7)
+    at resolveConfigPluginFunction (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js:136:7)
+    at withStaticPlugin (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js:85:70)
+    at C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\plugins\withPlugins.js:30:84
+    at Array.reduce (<anonymous>)
+    at withPlugins (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config-plugins\build\plugins\withPlugins.js:30:18)
+    at withConfigPlugins (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config\build\plugins\withConfigPlugins.js:35:47)
+    at fillAndReturnConfig (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config\build\Config.js:236:78)
+    at getConfig (C:\DEGREE FTSM UKM\mydana\node_modules\@expo\config\build\Config.js:293:10)
+Starting project at C:\DEGREE FTSM UKM\mydana
