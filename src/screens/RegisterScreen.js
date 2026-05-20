@@ -34,9 +34,7 @@ export default function RegisterScreen({ navigation }) {
         nama, emel, telefon, role: 'user', createdAt: serverTimestamp(),
       });
       setSuccess('Akaun berjaya didaftar!');
-      Alert.alert('Berjaya', 'Akaun anda berjaya didaftar!', [
-        { text: 'Log Masuk', onPress: () => navigation.navigate('Login') },
-      ]);
+      Alert.alert('Berjaya', 'Akaun anda berjaya didaftar!');
       setNama(''); setEmel(''); setTelefon(''); setPassword('');
     } catch (err) {
       if (err.code === 'auth/email-already-in-use') {

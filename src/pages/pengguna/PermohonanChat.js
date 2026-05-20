@@ -5,32 +5,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import Groq from 'groq-sdk';
 import '../../css/PermohonanChat.css';
 import { GROQ_API_KEY } from '../../constants';
-
-const groq = new Groq({
-  apiKey: GROQ_API_KEY,
-  dangerouslyAllowBrowser: true
-});
-
-const SYSTEM_PROMPT = `
-Anda adalah Chatbot AI MyDana. Tugas anda adalah mengumpul maklumat kempen sumbangan dengan teliti untuk mengelakkan penipuan dan memastikan maklumat yang diberikan adalah sahih. Anda juga perlu menggunakan Bahasa Melayu yang betul sebagai bahasa utama. Sekiranya pemohon minta untuk tukar bahasa baru, anda boleh tukar bahasa mengikut permintaan pemohon.
-
-ALIRAN SOALAN WAJIB (Tanya satu per satu pastikan tidak tertinggal):
-1. Tajuk Permohonan (Contoh: Bantuan Kos Pembedahan Jantung).
-2. Lokasi Pemohon (Bandar & Negeri).
-3. Deskripsi & Maklumat Penuh (Kenapa dana diperlukan secara terperinci).
-4. Jumlah Dana diperlukan (RM).
-5. Maklumat Akaun Bank (Nama Bank & No. Akaun). Maklumkan bahawa nama akaun MESTI sepadan dengan nama pemohon.
-6. Minta lampiran dokumen sokongan berikut:
-   - Bil/Invois Rasmi (Hospital/Badan berkaitan).
-   - Penyata Bank (Bank Statement) untuk pengesahan akaun.
-   - Sebut harga (Quotation) bagi keperluan yang dipohon.
-
-GAYA KOMUNIKASI:
-- Profesional, empati, dan berintegriti.
-- Pastikan maklumat bank diberikan sebelum menamatkan chat.
-- Beritahu pengguna bahawa data ini akan disemak secara manual oleh Admin MyDana.
-`;
-
+import { getSystemPrompt, callGroqAPI, analyzeApplication } from '../../aiService';
 function PermohonanChat() {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -95,15 +70,14 @@ function PermohonanChat() {
     setIsTyping(true);
 
     try {
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...newHistory.map(m => ({ role: m.role, content: m.text }))],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.5,
-      });
+      const reply = await callGroqAPI([
+        { role: 'system', content: getSystemPrompt(existingApp) }, 
+        ...newHistory.map(m => ({ role: m.role, content: m.text }))
+      ]);
 
       setMessages(prev => [...prev, {
         id: prev.length + 1, sender: 'bot', name: 'Pakar Verifikasi MyDana',
-        text: completion.choices[0]?.message?.content, role: 'assistant'
+        text: reply, role: 'assistant'
       }]);
     } catch (error) { console.error(error); } finally { setIsTyping(false); }
   };
@@ -123,12 +97,13 @@ function PermohonanChat() {
       setMessages(prev => [...prev, { id: prev.length + 1, sender: 'user', name: 'Sistem', text: systemLog, role: 'user' }]);
 
       // Memberitahu AI tentang fail yang baru masuk
-      const completion = await groq.chat.completions.create({
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages.map(m => ({ role: m.role, content: m.text })), { role: 'user', content: systemLog }],
-        model: "llama-3.3-70b-versatile",
-      });
+      const reply = await callGroqAPI([
+        { role: 'system', content: getSystemPrompt(existingApp) }, 
+        ...messages.map(m => ({ role: m.role, content: m.text })), 
+        { role: 'user', content: systemLog }
+      ]);
 
-      setMessages(prev => [...prev, { id: prev.length + 1, sender: 'bot', name: 'Pakar Verifikasi MyDana', text: completion.choices[0]?.message?.content, role: 'assistant' }]);
+      setMessages(prev => [...prev, { id: prev.length + 1, sender: 'bot', name: 'Pakar Verifikasi MyDana', text: reply, role: 'assistant' }]);
     } catch (err) { console.error(err); } finally { setIsTyping(false); }
   };
 
@@ -140,23 +115,18 @@ function PermohonanChat() {
 
     setIsTyping(true);
     try {
-      // Menjana ringkasan untuk ADMIN
-      const analysis = await groq.chat.completions.create({
-        messages: [
-          { role: 'system', content: "Hasilkan rumusan permohonan dalam JSON format: {tajuk, lokasi, jumlah_rm, bank_info, ringkasan_kes, tahap_risiko}" },
-          ...messages.map(m => ({ role: m.role, content: m.text }))
-        ],
-        model: "llama-3.3-70b-versatile",
-        response_format: { type: "json_object" }
-      });
-
-      const aiAnalysis = JSON.parse(analysis.choices[0].message.content);
+      // Menggunakan analisis berpusat di constants.js
+      const aiAnalysis = await analyzeApplication(messages);
 
       const appData = {
         uid: auth.currentUser.uid,
         email: auth.currentUser.email,
+        category: aiAnalysis.summary.kategori || 'Umum',
         status: 'pending',
-        details: aiAnalysis,
+        details: aiAnalysis.summary, // Sesuai dengan struktur baru
+        aiAnalysis: aiAnalysis.analysis, // Tambah analisis terperinci
+        score: aiAnalysis.analysis?.skor || 0,
+        scoreClass: aiAnalysis.analysis?.skor >= 80 ? 'high' : (aiAnalysis.analysis?.skor > 60 ? 'medium' : 'low'),
         transcript: messages,
         documents: uploadedDocs,
         createdAt: serverTimestamp(),

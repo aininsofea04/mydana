@@ -36,7 +36,6 @@ export default function LoginScreen({ navigation }) {
       signInWithCredential(auth, credential)
         .then(() => {
           Alert.alert('Berjaya', 'Log masuk Google berjaya!');
-          navigation.navigate('Home');
         })
         .catch((err) => {
           setError(`Gagal log masuk Google: ${err.message}`);
@@ -55,7 +54,6 @@ export default function LoginScreen({ navigation }) {
     try {
       await signInWithEmailAndPassword(auth, emel, password);
       Alert.alert('Berjaya', 'Log masuk berjaya! Selamat kembali.');
-      navigation.navigate('Home');
     } catch (err) {
       if (err.code === 'auth/invalid-credential') {
         setError('Emel atau kata laluan tidak tepat.');
@@ -96,7 +94,7 @@ export default function LoginScreen({ navigation }) {
           </View>
 
           {/* Header */}
-          <Text style={styles.title}>Selamat Datang ke{'\n'}MyDana</Text>
+          <Text style={styles.title}>Selamat Datang ke MyDana</Text>
           <Text style={styles.subtitle}>Sila masukkan butiran anda untuk mengakses akaun.</Text>
 
           {/* Error */}
@@ -154,15 +152,8 @@ export default function LoginScreen({ navigation }) {
           {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ATAU</Text>
             <View style={styles.dividerLine} />
           </View>
-
-          {/* Google Button */}
-          <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleLogin} activeOpacity={0.85}>
-            <Ionicons name="logo-google" size={20} color="#EA4335" />
-            <Text style={styles.socialBtnText}>Log Masuk dengan Google</Text>
-          </TouchableOpacity>
 
           {/* Register Link */}
           <View style={styles.footer}>

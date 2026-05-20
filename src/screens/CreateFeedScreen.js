@@ -78,10 +78,21 @@ export default function CreateFeedScreen({ navigation }) {
       let finalVideoUrl = videoUri;
       let finalImages = [...images];
 
+      // Helper untuk menukar URI tempatan kepada Blob dengan selamat (mengelakkan Ralat Fetch Network)
+      const getBlobFromUri = async (uri) => {
+        return await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.onload = () => resolve(xhr.response);
+          xhr.onerror = (e) => reject(new TypeError("Network request failed"));
+          xhr.responseType = "blob";
+          xhr.open("GET", uri, true);
+          xhr.send(null);
+        });
+      };
+
       // Upload Video if new
-      if (videoUri && videoUri.startsWith('file://')) {
-        const res = await fetch(videoUri);
-        const blob = await res.blob();
+      if (videoUri && !videoUri.startsWith('http')) {
+        const blob = await getBlobFromUri(videoUri);
         const sRef = ref(storage, `feeds/${uid}/video_${Date.now()}.mp4`);
         await uploadBytes(sRef, blob);
         finalVideoUrl = await getDownloadURL(sRef);
@@ -91,8 +102,7 @@ export default function CreateFeedScreen({ navigation }) {
       const uploadedImageUrls = await Promise.all(
         images.map(async (uri) => {
           if (uri.startsWith('http')) return uri;
-          const res = await fetch(uri);
-          const blob = await res.blob();
+          const blob = await getBlobFromUri(uri);
           const sRef = ref(storage, `feeds/${uid}/img_${Date.now()}_${Math.random()}.jpg`);
           await uploadBytes(sRef, blob);
           return await getDownloadURL(sRef);
@@ -144,8 +154,10 @@ export default function CreateFeedScreen({ navigation }) {
           onChangeText={setDescription}
         />
 
-        <Text style={styles.sectionTitle}>Video & Gambar</Text>
-        <Text style={styles.subtitle}>Muat naik video pendek atau gambar untuk menarik perhatian penderma.</Text>
+        {!appData?.isPublished && (
+          <>
+            <Text style={styles.sectionTitle}>Video & Gambar</Text>
+            <Text style={styles.subtitle}>Muat naik video pendek atau gambar untuk menarik perhatian penderma.</Text>
         
         <View style={styles.mediaContainer}>
           {videoUri ? (
@@ -183,7 +195,9 @@ export default function CreateFeedScreen({ navigation }) {
               </TouchableOpacity>
             </View>
           ))}
-        </ScrollView>
+          </ScrollView>
+          </>
+        )}
 
         <TouchableOpacity 
           style={[styles.publishBtn, uploading && { opacity: 0.7 }]} 
@@ -194,8 +208,8 @@ export default function CreateFeedScreen({ navigation }) {
             <ActivityIndicator color="#fff" />
           ) : (
             <>
-              <Text style={styles.publishBtnText}>Publish ke Halaman Utama</Text>
-              <Ionicons name="rocket" size={20} color="#fff" />
+              <Text style={styles.publishBtnText}>{appData?.isPublished ? 'Simpan Kemaskini' : 'Publish ke Halaman Utama'}</Text>
+              <Ionicons name={appData?.isPublished ? 'save' : 'rocket'} size={20} color="#fff" />
             </>
           )}
         </TouchableOpacity>

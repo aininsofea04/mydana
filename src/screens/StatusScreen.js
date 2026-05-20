@@ -83,8 +83,8 @@ export default function StatusScreen({ navigation }) {
           <Text style={{ fontSize: 40, marginBottom: 16 }}>🔒</Text>
           <Text style={styles.emptyTitle}>Log Masuk Diperlukan</Text>
           <Text style={styles.emptyText}>Sila log masuk untuk melihat status permohonan anda.</Text>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.btnPrimaryText}>Log Masuk</Text>
+          <TouchableOpacity style={styles.btnPrimary} onPress={() => auth.signOut()}>
+            <Text style={styles.btnPrimaryText}>Log Keluar</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -118,6 +118,12 @@ export default function StatusScreen({ navigation }) {
   const renderStatusCard = (app) => {
     const createdDate = app.createdAt?.toDate ? app.createdAt.toDate() : new Date();
     const dateStr = createdDate.toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
+    
+    let updatedDateStr = '';
+    if (app.updatedAt && app.updatedAt.toDate) {
+      updatedDateStr = app.updatedAt.toDate().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
     const status = app.status || 'pending';
     
     const statusConfig = {
@@ -140,16 +146,67 @@ export default function StatusScreen({ navigation }) {
           <Text style={styles.detailLabel}>TARIKH: {dateStr}</Text>
         </View>
 
+        {/* Timeline Sejarah Status */}
+        <View style={{ marginTop: 16, marginBottom: 8 }}>
+          {[
+            { id: 1, label: 'Permohonan Dihantar', desc: `Dihantar pada: ${dateStr}` },
+            { id: 2, label: 'Dalam Semakan', desc: 'Permohonan diteliti oleh pihak admin.' },
+            { id: 3, label: status === 'rejected' ? 'Permohonan Ditolak' : 'Permohonan Diluluskan', desc: status === 'pending' ? 'Menunggu keputusan akhir.' : (status === 'rejected' ? `Ditolak${updatedDateStr ? ` pada: ${updatedDateStr}` : ''}` : `Diluluskan${updatedDateStr ? ` pada: ${updatedDateStr}` : ''}`) }
+          ].map((step, index, arr) => {
+            let currentStep = 1;
+            if (status === 'pending') currentStep = 2;
+            if (status === 'approved' || status === 'rejected') currentStep = 3;
+
+            const isDone = step.id <= currentStep;
+            const isActive = step.id === currentStep;
+            const isLast = index === arr.length - 1;
+
+            let dotStyle = styles.timelineDot;
+            if (isDone) dotStyle = [styles.timelineDot, styles.timelineDotDone];
+            if (isActive && status === 'pending') dotStyle = [styles.timelineDot, styles.timelineDotActive];
+            if (isActive && status === 'rejected') dotStyle = [styles.timelineDot, { backgroundColor: COLORS.error }];
+
+            return (
+              <View key={step.id} style={styles.timelineItem}>
+                <View style={styles.timelineLeft}>
+                  <View style={dotStyle}>
+                    {isDone ? (
+                      <Ionicons name={step.id === 3 && status === 'rejected' ? "close" : "checkmark"} size={14} color="#fff" />
+                    ) : (
+                      <Text style={styles.timelineNum}>{step.id}</Text>
+                    )}
+                  </View>
+                  {!isLast && <View style={[styles.timelineLine, isDone && step.id < currentStep && styles.timelineLineDone]} />}
+                </View>
+                <View style={styles.timelineContent}>
+                  <Text style={[styles.timelineLabel, isDone && { color: COLORS.text, fontWeight: '700' }]}>{step.label}</Text>
+                  <Text style={styles.timelineDesc}>{step.desc}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
         {status === 'approved' && (
-          <TouchableOpacity 
-            style={styles.createBtn} 
-            onPress={() => navigation.navigate('CreateFeed', { appId: app.id })}
-          >
-            <Ionicons name="images-outline" size={18} color="#fff" />
-            <Text style={styles.createBtnText}>
-              {app.isPublished ? 'Kemaskini Kandungan' : 'Cipta Kandungan Kempen'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ gap: 10, marginTop: 16 }}>
+            <TouchableOpacity 
+              style={styles.createBtn} 
+              onPress={() => navigation.navigate('CreateFeed', { appId: app.id })}
+            >
+              <Ionicons name="images-outline" size={18} color="#fff" />
+              <Text style={styles.createBtnText}>
+                {app.isPublished ? 'Kemaskini Kandungan' : 'Cipta Kandungan Kempen'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.createBtn, { backgroundColor: COLORS.primary }]} 
+              onPress={() => navigation.navigate('CreateProgressReport', { appId: app.id })}
+            >
+              <Ionicons name="megaphone-outline" size={18} color="#fff" />
+              <Text style={styles.createBtnText}>Lapor Perkembangan</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {status === 'rejected' && (

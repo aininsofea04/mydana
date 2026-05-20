@@ -11,25 +11,32 @@ import { COLORS, ADMIN_EMAIL } from './src/constants';
 import HomeScreen from './src/screens/HomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
-import MainPageScreen from './src/screens/MainPageScreen'; // Ini adalah 'Kempen'
-import ChatScreen from './src/screens/ChatScreen';         // Ini adalah 'Mohon Dana'
-import StatusScreen from './src/screens/StatusScreen';     // Ini boleh jadi 'Inbox/Status'
-import ProfileScreen from './src/screens/ProfileScreen';   // Halaman Profil
-import AdminScreen from './src/screens/AdminScreen';       // Halaman Admin
-import PaymentScreen from './src/screens/PaymentScreen';   // Halaman Bayar
+import MainPageScreen from './src/screens/MainPageScreen'; 
+import ChatScreen from './src/screens/ChatScreen';         
+import StatusScreen from './src/screens/StatusScreen';     
+import ProfileScreen from './src/screens/ProfileScreen';   
+import AdminHomeScreen from './src/screens/AdminHomeScreen'; 
+import AdminListScreen from './src/screens/AdminListScreen';
+import AdminAnalyticsScreen from './src/screens/AdminAnalyticsScreen'; 
+import AdminDetailScreen from './src/screens/AdminScreen'; // Gunakan AdminScreen lama sebagai detail
+import PaymentScreen from './src/screens/PaymentScreen';   
 import CreateFeedScreen from './src/screens/CreateFeedScreen';
+import ApplyHubScreen from './src/screens/ApplyHubScreen'; 
+import InboxScreen from './src/screens/InboxScreen';       
+import DirectMessageScreen from './src/screens/DirectMessageScreen';
+import CreateProgressReportScreen from './src/screens/CreateProgressReportScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// --- KOMPONEN TAB NAVIGATOR (Konsep TikTok) ---
-function MyTabs() {
+// --- USER TABS ---
+function UserTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: { 
-          backgroundColor: '#000', // Warna hitam seperti TikTok
+          backgroundColor: '#000', 
           height: 60,
           paddingBottom: 8,
           borderTopWidth: 0
@@ -38,26 +45,49 @@ function MyTabs() {
         tabBarInactiveTintColor: '#888',
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-
-          if (route.name === 'Kempen') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'Mohon') {
-            iconName = focused ? 'add-circle' : 'add-circle-outline';
-            size = 35; // Butang tengah lebih besar sedikit
-          } else if (route.name === 'Inbox') {
-            iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
-          } else if (route.name === 'Profil') {
-            iconName = focused ? 'person' : 'person-outline';
-          }
-
+          if (route.name === 'Kempen') iconName = focused ? 'home' : 'home-outline';
+          else if (route.name === 'Mohon') { iconName = focused ? 'add-circle' : 'add-circle-outline'; size = 35; }
+          else if (route.name === 'Inbox') iconName = focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
+          else if (route.name === 'Profil') iconName = focused ? 'person' : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Kempen" component={MainPageScreen} />
-      <Tab.Screen name="Mohon" component={ChatScreen} />
-      <Tab.Screen name="Inbox" component={StatusScreen} />
+      <Tab.Screen name="Mohon" component={ApplyHubScreen} />
+      <Tab.Screen name="Inbox" component={InboxScreen} />
       <Tab.Screen name="Profil" component={ProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+
+// --- ADMIN TABS ---
+function AdminTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: { 
+          backgroundColor: '#fff', 
+          height: 65,
+          paddingBottom: 10,
+          borderTopWidth: 1,
+          borderTopColor: '#e2e8f0'
+        },
+        tabBarActiveTintColor: '#004282',
+        tabBarInactiveTintColor: '#94a3b8',
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName;
+          if (route.name === 'Utama') iconName = focused ? 'grid' : 'grid-outline';
+          else if (route.name === 'Senarai') iconName = focused ? 'list' : 'list-outline';
+          else if (route.name === 'Analitik') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Utama" component={AdminHomeScreen} />
+      <Tab.Screen name="Senarai" component={AdminListScreen} />
+      <Tab.Screen name="Analitik" component={AdminAnalyticsScreen} />
     </Tab.Navigator>
   );
 }
@@ -72,28 +102,33 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-  if (currentUser === undefined) return null; // Atau skrin loading
+  if (currentUser === undefined) return null; 
 
   return (
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           {currentUser === null ? (
-            // Jika Belum Login
             <>
               <Stack.Screen name="Home" component={HomeScreen} />
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Register" component={RegisterScreen} />
             </>
           ) : currentUser?.email === ADMIN_EMAIL ? (
-            // Jika Login Sebagai ADMIN
-            <Stack.Screen name="Admin" component={AdminScreen} />
-          ) : (
-            // Jika Login Sebagai PENGGUNA BIASA
             <>
-              <Stack.Screen name="MainTabs" component={MyTabs} />
+              <Stack.Screen name="AdminTabs" component={AdminTabs} />
+              <Stack.Screen name="AdminDetail" component={AdminDetailScreen} />
+              <Stack.Screen name="CreateProgressReport" component={CreateProgressReportScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="MainTabs" component={UserTabs} />
               <Stack.Screen name="Payment" component={PaymentScreen} />
               <Stack.Screen name="CreateFeed" component={CreateFeedScreen} />
+              <Stack.Screen name="Chat" component={ChatScreen} />
+              <Stack.Screen name="Status" component={StatusScreen} />
+              <Stack.Screen name="DirectMessage" component={DirectMessageScreen} />
+              <Stack.Screen name="CreateProgressReport" component={CreateProgressReportScreen} />
             </>
           )}
         </Stack.Navigator>

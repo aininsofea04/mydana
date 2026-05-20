@@ -2,427 +2,852 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   FlatList, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
-  Image, ScrollView,
+  ScrollView, Modal, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { db, auth, storage } from '../firebase';
-import { collection, addDoc, doc, setDoc, getDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { COLORS, SYSTEM_PROMPT, callGroqAPI, analyzeApplication } from '../constants';
+import { db, auth } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { COLORS } from '../constants';
+import { callGroqAPI } from '../aiService';
 
-const INITIAL_MSG = {
-  id: '1', sender: 'bot', name: 'Pembantu AI MyDana',
-  text: 'Selamat datang ke MyDana. Saya adalah Pembantu AI anda. Mari kita mulakan permohonan anda. Boleh saya tahu nama penuh anda?',
-  role: 'assistant',
+// ─── DATA SENARAI ─────────────────────────────────────────────────────────────
+const NEGERI_LIST = [
+  'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan',
+  'Pahang', 'Perak', 'Perlis', 'Pulau Pinang', 'Sabah',
+  'Sarawak', 'Selangor', 'Terengganu', 'W.P. Kuala Lumpur',
+  'W.P. Labuan', 'W.P. Putrajaya',
+];
+
+const BANDAR_BY_NEGERI = {
+  'Johor': ['Johor Bahru', 'Batu Pahat', 'Kluang', 'Muar', 'Segamat', 'Pontian', 'Kota Tinggi', 'Mersing'],
+  'Kedah': ['Alor Setar', 'Sungai Petani', 'Kulim', 'Langkawi', 'Baling', 'Pendang', 'Yan'],
+  'Kelantan': ['Kota Bharu', 'Tanah Merah', 'Pasir Mas', 'Machang', 'Kuala Krai', 'Gua Musang', 'Tumpat'],
+  'Melaka': ['Melaka Bandaraya', 'Alor Gajah', 'Jasin', 'Masjid Tanah', 'Merlimau'],
+  'Negeri Sembilan': ['Seremban', 'Port Dickson', 'Nilai', 'Rembau', 'Jempol', 'Tampin'],
+  'Pahang': ['Kuantan', 'Temerloh', 'Bentong', 'Raub', 'Jerantut', 'Cameron Highlands', 'Rompin'],
+  'Perak': ['Ipoh', 'Taiping', 'Teluk Intan', 'Manjung', 'Kuala Kangsar', 'Batu Gajah', 'Gerik'],
+  'Perlis': ['Kangar', 'Arau', 'Padang Besar'],
+  'Pulau Pinang': ['George Town', 'Butterworth', 'Bukit Mertajam', 'Bayan Lepas', 'Nibong Tebal'],
+  'Sabah': ['Kota Kinabalu', 'Sandakan', 'Tawau', 'Lahad Datu', 'Keningau', 'Beaufort', 'Kudat'],
+  'Sarawak': ['Kuching', 'Miri', 'Sibu', 'Bintulu', 'Sri Aman', 'Kapit', 'Limbang'],
+  'Selangor': ['Shah Alam', 'Petaling Jaya', 'Subang Jaya', 'Klang', 'Kajang', 'Ampang', 'Rawang', 'Sepang'],
+  'Terengganu': ['Kuala Terengganu', 'Kemaman', 'Dungun', 'Marang', 'Hulu Terengganu'],
+  'W.P. Kuala Lumpur': ['Chow Kit', 'Bangsar', 'Bukit Bintang', 'Wangsa Maju', 'Kepong', 'Segambut', 'Setiawangsa'],
+  'W.P. Labuan': ['Labuan'],
+  'W.P. Putrajaya': ['Putrajaya'],
 };
 
-export default function ChatScreen({ navigation }) {
-  const [messages, setMessages] = useState([INITIAL_MSG]);
+const BANK_LIST = [
+  'Maybank', 'CIMB Bank', 'Public Bank', 'RHB Bank', 'Hong Leong Bank',
+  'AmBank', 'Bank Islam', 'Bank Rakyat', 'BSN (Bank Simpanan Nasional)',
+  'Affin Bank', 'Alliance Bank', 'OCBC Bank', 'Standard Chartered',
+  'HSBC Bank', 'UOB Bank', 'Bank Muamalat', 'Agrobank',
+];
+
+// ─── DROPDOWN COMPONENT (must be outside any form component) ──────────────────
+const DropdownSelect = ({ label, value, options, onSelect, placeholder, error }) => {
+  const [visible, setVisible] = useState(false);
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.label}>{label}</Text>
+      <TouchableOpacity
+        style={[s.input, s.dropdownTrigger, error && s.inputError]}
+        onPress={() => setVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={value ? s.dropdownValue : s.dropdownPlaceholder}>
+          {value || placeholder || 'Sila pilih...'}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
+      </TouchableOpacity>
+      {error ? <Text style={s.errorText}>{error}</Text> : null}
+
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+          <View style={s.modalSheet}>
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{label}</Text>
+              <TouchableOpacity onPress={() => setVisible(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {options.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  style={[s.modalItem, value === opt && s.modalItemActive]}
+                  onPress={() => { onSelect(opt); setVisible(false); }}
+                >
+                  <Text style={[s.modalItemText, value === opt && s.modalItemTextActive]}>{opt}</Text>
+                  {value === opt && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+// ─── FIELD COMPONENT ─────────────────────────────────────────────────────────
+const Field = ({ label, fkey, placeholder, multiline, keyboardType, hint, form, setForm, errors }) => {
+  const set = (val) => setForm(f => ({ ...f, [fkey]: val }));
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.label}>{label}</Text>
+      {hint ? <Text style={s.hint}>{hint}</Text> : null}
+      <TextInput
+        style={[s.input, multiline && s.inputMulti, errors[fkey] && s.inputError]}
+        placeholder={placeholder || ''}
+        placeholderTextColor={COLORS.textMuted}
+        value={form[fkey]}
+        onChangeText={set}
+        multiline={!!multiline}
+        numberOfLines={multiline || 1}
+        keyboardType={keyboardType || 'default'}
+        autoCapitalize="none"
+      />
+      {errors[fkey] ? <Text style={s.errorText}>{errors[fkey]}</Text> : null}
+    </View>
+  );
+};
+
+// ─── DATE PICKER CALENDAR MODAL ──────────────────────────────────────────────
+const MONTHS_MY = ['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogs','Sep','Okt','Nov','Dis'];
+const DAYS_MY = ['Ahd','Isn','Sel','Rab','Kam','Jum','Sab'];
+
+const DatePickerModal = ({ label, value, onSelect, error }) => {
+  const [visible, setVisible] = useState(false);
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const cells = Array(firstDay).fill(null).concat(
+    Array.from({ length: daysInMonth }, (_, i) => i + 1)
+  );
+  // pad to full rows
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const formatDate = (y, m, d) => `${String(d).padStart(2,'0')}/${String(m+1).padStart(2,'0')}/${y}`;
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  return (
+    <View style={s.fieldWrap}>
+      <Text style={s.label}>{label}</Text>
+      <TouchableOpacity
+        style={[s.input, s.dropdownTrigger, error && s.inputError]}
+        onPress={() => setVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="calendar-outline" size={18} color={COLORS.primary} style={{ marginRight: 8 }} />
+        <Text style={value ? s.dropdownValue : s.dropdownPlaceholder}>
+          {value || 'Pilih tarikh...'}
+        </Text>
+      </TouchableOpacity>
+      {error ? <Text style={s.errorText}>{error}</Text> : null}
+
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
+          <View style={[s.modalSheet, { paddingBottom: 24 }]}>
+            {/* Header */}
+            <View style={s.modalHeader}>
+              <Text style={s.modalTitle}>{label}</Text>
+              <TouchableOpacity onPress={() => setVisible(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            {/* Month Nav */}
+            <View style={s.calNav}>
+              <TouchableOpacity onPress={prevMonth} style={s.calNavBtn}>
+                <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+              <Text style={s.calMonthLabel}>{MONTHS_MY[viewMonth]} {viewYear}</Text>
+              <TouchableOpacity onPress={nextMonth} style={s.calNavBtn}>
+                <Ionicons name="chevron-forward" size={22} color={COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+            {/* Day headers */}
+            <View style={s.calDayRow}>
+              {DAYS_MY.map(d => (
+                <Text key={d} style={s.calDayHeader}>{d}</Text>
+              ))}
+            </View>
+            {/* Date grid */}
+            <View style={s.calGrid}>
+              {cells.map((day, idx) => {
+                const dateStr = day ? formatDate(viewYear, viewMonth, day) : '';
+                const isSelected = dateStr === value;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[s.calCell, isSelected && s.calCellSelected]}
+                    onPress={() => { if (day) { onSelect(dateStr); setVisible(false); } }}
+                    disabled={!day}
+                  >
+                    <Text style={[s.calCellText, isSelected && s.calCellTextSelected, !day && { opacity: 0 }]}>
+                      {day || '.'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
+
+// ─── DOCUMENT UPLOAD SECTION ──────────────────────────────────────────────────
+const DocUploadSection = ({ docs, setDocs }) => {
+  const handleCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Akses Ditolak', 'Sila benarkan akses kamera dalam tetapan.'); return; }
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+    if (!result.canceled) {
+      const asset = result.assets[0];
+      setDocs(prev => [...prev, { uri: asset.uri, name: `Gambar_${Date.now()}.jpg`, type: 'image' }]);
+    }
+  };
+  const handleGallery = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsMultipleSelection: true,
+    });
+    if (!result.canceled) {
+      const newFiles = result.assets.map(a => ({ uri: a.uri, name: a.fileName || `Imej_${Date.now()}.jpg`, type: 'image' }));
+      setDocs(prev => [...prev, ...newFiles]);
+    }
+  };
+  const handleFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: true });
+    if (!result.canceled) {
+      const newFiles = result.assets.map(a => ({ uri: a.uri, name: a.name, type: 'file' }));
+      setDocs(prev => [...prev, ...newFiles]);
+    }
+  };
+  const removeDoc = (idx) => setDocs(prev => prev.filter((_, i) => i !== idx));
+
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>⑤ Dokumen Sokongan</Text>
+      <Text style={s.hint}>Muat naik bil, invois, surat rasmi, atau dokumen berkaitan (PDF/Gambar)</Text>
+      <View style={s.uploadBtnRow}>
+        <TouchableOpacity style={s.uploadBtn} onPress={handleCamera}>
+          <Ionicons name="camera" size={22} color={COLORS.primary} />
+          <Text style={s.uploadBtnText}>Kamera</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.uploadBtn} onPress={handleGallery}>
+          <Ionicons name="images" size={22} color={COLORS.primary} />
+          <Text style={s.uploadBtnText}>Galeri</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={s.uploadBtn} onPress={handleFile}>
+          <Ionicons name="document-attach" size={22} color={COLORS.primary} />
+          <Text style={s.uploadBtnText}>Fail</Text>
+        </TouchableOpacity>
+      </View>
+
+      {docs.length === 0 ? (
+        <View style={s.emptyDoc}>
+          <Ionicons name="cloud-upload-outline" size={32} color={COLORS.textMuted} />
+          <Text style={s.emptyDocText}>Belum ada dokumen dimuat naik</Text>
+        </View>
+      ) : (
+        <View style={s.docList}>
+          {docs.map((doc, idx) => (
+            <View key={idx} style={s.docItem}>
+              {doc.type === 'image' ? (
+                <Image source={{ uri: doc.uri }} style={s.docThumb} />
+              ) : (
+                <View style={s.docIcon}>
+                  <Ionicons name="document-text" size={24} color={COLORS.primary} />
+                </View>
+              )}
+              <Text style={s.docName} numberOfLines={1}>{doc.name}</Text>
+              <TouchableOpacity onPress={() => removeDoc(idx)} style={s.docRemoveBtn}>
+                <Ionicons name="close-circle" size={22} color={COLORS.error} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const CATEGORIES = [
+  'Rawatan Perubatan',
+  'Pendidikan',
+  'Bantuan Sara Hidup',
+  'Haiwan',
+  'Bencana Alam',
+  'Lain-lain',
+];
+
+// ─── PHASE 1: FORM ───────────────────────────────────────────────────────────
+function ApplicationForm({ onSubmit }) {
+  const [form, setForm] = useState({
+    namapenuh: '',
+    bandar: '',
+    negeri: '',
+    telefon: '',
+    email: '',
+    alamat: '',
+    kategori: '',
+    sebab: '',
+    jumlah: '',
+    tarikmula: '',
+    tarihtamat: '',
+    namabank: '',
+    noakaun: '',
+  });
+  const [errors, setErrors] = useState({});
+  const [docs, setDocs] = useState([]);
+
+  const validate = () => {
+    const e = {};
+    if (!form.namapenuh.trim()) e.namapenuh = 'Wajib diisi';
+    if (!form.bandar.trim()) e.bandar = 'Wajib diisi';
+    if (!form.negeri.trim()) e.negeri = 'Wajib diisi';
+    if (!form.telefon.trim()) e.telefon = 'Wajib diisi';
+    if (!form.email.trim()) e.email = 'Wajib diisi';
+    if (!form.alamat.trim()) e.alamat = 'Wajib diisi';
+    if (!form.kategori) e.kategori = 'Sila pilih kategori';
+    if (form.sebab.trim().length < 30) e.sebab = 'Sila huraikan dengan lebih terperinci (min 30 aksara)';
+    if (!form.jumlah.trim() || isNaN(Number(form.jumlah))) e.jumlah = 'Sila masukkan jumlah yang sah';
+    if (!form.tarikmula.trim()) e.tarikmula = 'Wajib diisi';
+    if (!form.tarihtamat.trim()) e.tarihtamat = 'Wajib diisi';
+    if (!form.namabank.trim()) e.namabank = 'Wajib diisi';
+    if (!form.noakaun.trim()) e.noakaun = 'Wajib diisi';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleNext = () => {
+    if (validate()) onSubmit(form, docs);
+  };
+
+  return (
+    <SafeAreaView style={s.safe}>
+      <View style={s.header}>
+        <Ionicons name="document-text" size={22} color={COLORS.primary} />
+        <Text style={s.headerTitle}>Borang Permohonan Dana</Text>
+      </View>
+      <ScrollView contentContainerStyle={s.formScroll} keyboardShouldPersistTaps="handled">
+
+        {/* SEKSYEN 1 */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>① Maklumat Peribadi</Text>
+          <Field label="Nama Penuh" fkey="namapenuh" placeholder="Contoh: Ahmad bin Ali" form={form} setForm={setForm} errors={errors} />
+          <DropdownSelect
+            label="Negeri"
+            value={form.negeri}
+            options={NEGERI_LIST}
+            placeholder="Pilih Negeri..."
+            error={errors.negeri}
+            onSelect={(val) => setForm(f => ({ ...f, negeri: val, bandar: '' }))}
+          />
+          <DropdownSelect
+            label="Bandar"
+            value={form.bandar}
+            options={form.negeri ? (BANDAR_BY_NEGERI[form.negeri] || []) : []}
+            placeholder={form.negeri ? 'Pilih Bandar...' : 'Pilih Negeri dahulu'}
+            error={errors.bandar}
+            onSelect={(val) => setForm(f => ({ ...f, bandar: val }))}
+          />
+          <Field label="No. Telefon" fkey="telefon" placeholder="0123456789" keyboardType="phone-pad" form={form} setForm={setForm} errors={errors} />
+          <Field label="Email" fkey="email" placeholder="email@contoh.com" keyboardType="email-address" form={form} setForm={setForm} errors={errors} />
+          <Field label="Alamat Rumah Lengkap" fkey="alamat" placeholder="No, Jalan, Taman, Poskod, Negeri" multiline={4}
+            hint="Sila nyatakan alamat penuh termasuk poskod." form={form} setForm={setForm} errors={errors} />
+        </View>
+
+        {/* SEKSYEN 2 */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>② Maklumat Permohonan</Text>
+          <View style={s.fieldWrap}>
+            <Text style={s.label}>Kategori Permohonan</Text>
+            {errors.kategori ? <Text style={s.errorText}>{errors.kategori}</Text> : null}
+            <View style={s.catGrid}>
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[s.catChip, form.kategori === cat && s.catChipActive]}
+                  onPress={() => setForm(f => ({ ...f, kategori: cat }))}
+                >
+                  <Text style={[s.catChipText, form.kategori === cat && s.catChipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <Field
+            label="Sebab Permohonan (Terperinci)"
+            fkey="sebab"
+            multiline={6}
+            placeholder="Huraikan sebab secara terperinci. Contoh: Bil hospital tertunggak kerana kehilangan pekerjaan sejak Mac 2024..."
+            hint="⚠️ Jika ada tunggakan, jelaskan KENAPA ia tertunggak."
+            form={form} setForm={setForm} errors={errors}
+          />
+          <Field label="Jumlah Dana Diperlukan (RM)" fkey="jumlah" placeholder="Contoh: 3500" keyboardType="decimal-pad" form={form} setForm={setForm} errors={errors} />
+        </View>
+
+        {/* SEKSYEN 3 */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>③ Tempoh Kutipan</Text>
+          <DatePickerModal
+            label="Tarikh Mula Kutipan"
+            value={form.tarikmula}
+            error={errors.tarikmula}
+            onSelect={(val) => setForm(f => ({ ...f, tarikmula: val }))}
+          />
+          <DatePickerModal
+            label="Tarikh Tamat Kutipan"
+            value={form.tarihtamat}
+            error={errors.tarihtamat}
+            onSelect={(val) => setForm(f => ({ ...f, tarihtamat: val }))}
+          />
+        </View>
+
+        {/* SEKSYEN 4 */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>④ Maklumat Akaun Bank</Text>
+          <DropdownSelect
+            label="Nama Bank"
+            value={form.namabank}
+            options={BANK_LIST}
+            placeholder="Pilih Bank..."
+            error={errors.namabank}
+            onSelect={(val) => setForm(f => ({ ...f, namabank: val }))}
+          />
+          <Field label="No. Akaun Bank" fkey="noakaun" placeholder="Contoh: 1234567890" keyboardType="number-pad" form={form} setForm={setForm} errors={errors} />
+        </View>
+
+        {/* SEKSYEN 5 - DOKUMEN */}
+        <DocUploadSection docs={docs} setDocs={setDocs} />
+
+        <TouchableOpacity style={s.nextBtn} onPress={handleNext} activeOpacity={0.85}>
+          <Text style={s.nextBtnText}>Teruskan ke Pengesahan AI</Text>
+          <Ionicons name="arrow-forward-circle" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View style={{ height: 32 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ─── PHASE 2: CHATBOT VERIFICATION ───────────────────────────────────────────
+function ChatVerification({ formData, navigation, onBack }) {
+  const buildSummary = (f) =>
+    `MAKLUMAT PEMOHON:\n` +
+    `- Nama: ${f.namapenuh}\n` +
+    `- Lokasi: ${f.bandar}, ${f.negeri}\n` +
+    `- Telefon: ${f.telefon} | Email: ${f.email}\n` +
+    `- Alamat: ${f.alamat}\n` +
+    `- Kategori: ${f.kategori}\n` +
+    `- Sebab: ${f.sebab}\n` +
+    `- Jumlah: RM${f.jumlah}\n` +
+    `- Tempoh: ${f.tarikmula} hingga ${f.tarihtamat}\n` +
+    `- Bank: ${f.namabank} | No. Akaun: ${f.noakaun}`;
+
+  const SYSTEM_PROMPT = `Anda adalah Pegawai Verifikasi AI MyDana. Pemohon telah mengisi borang permohonan dana. Tugas anda adalah:
+1. Semak kesahihan maklumat yang diberikan secara kritikal.
+2. Tanya soalan susulan jika ada maklumat yang meragukan atau tidak lengkap.
+3. Pastikan sebab permohonan adalah logik dan terperinci.
+4. Jika semua maklumat SAH dan MEMUASKAN, beritahu pemohon untuk tekan butang "Hantar Permohonan".
+5. Jika ada isu, minta pemohon jelaskan dalam chat ini.
+Bersikap profesional, empati tetapi tegas.`;
+
+  const INIT_MSG = {
+    id: '0', sender: 'bot', role: 'assistant',
+    text: `Terima kasih kerana mengisi borang permohonan.\n\nSaya akan menyemak maklumat anda sebentar...`,
+  };
+
+  const [messages, setMessages] = useState([INIT_MSG]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [uploadedDocs, setUploadedDocs] = useState([]);
-  const [existingApp, setExistingApp] = useState(null);
-  const [checkingApp, setCheckingApp] = useState(true);
-  const [pendingFiles, setPendingFiles] = useState([]);
+  const [isValidated, setIsValidated] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const flatListRef = useRef(null);
 
-  // Load saved session
+  // Auto-start: AI reviews the form on mount
   useEffect(() => {
-    const load = async () => {
-      if (!auth.currentUser) return;
+    const runInitialReview = async () => {
+      setIsTyping(true);
+      const summary = buildSummary(formData);
+      const history = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: `Berikut adalah maklumat yang telah saya isi dalam borang:\n\n${summary}\n\nSila semak dan beritahu saya jika ada isu atau maklumat yang perlu saya jelaskan.`,
+        },
+      ];
       try {
-        const uid = auth.currentUser.uid;
-        const saved = await AsyncStorage.getItem(`mydana_chat_session_${uid}`);
-        if (saved) setMessages(JSON.parse(saved));
-        const docs = await AsyncStorage.getItem(`mydana_docs_${uid}`);
-        if (docs) setUploadedDocs(JSON.parse(docs));
-      } catch (e) { console.error(e); }
+        const reply = await callGroqAPI(history);
+        const approved = reply.toLowerCase().includes('sah') || reply.toLowerCase().includes('hantar') || reply.toLowerCase().includes('lengkap');
+        setMessages(prev => [
+          ...prev,
+          { id: Date.now().toString(), sender: 'bot', role: 'assistant', text: reply },
+        ]);
+        setIsValidated(approved);
+      } catch (e) {
+        setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', role: 'assistant', text: 'Ralat sistem. Sila cuba lagi.' }]);
+      } finally {
+        setIsTyping(false);
+      }
     };
-    load();
+    runInitialReview();
   }, []);
 
-  // Check existing application
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        try {
-          const docSnap = await getDoc(doc(db, 'applications', user.uid));
-          if (docSnap.exists()) setExistingApp(docSnap.data());
-        } catch (e) { console.error(e); }
-      }
-      setCheckingApp(false);
-    });
-    return unsub;
-  }, []);
-
-  // Auto-save chat
-  useEffect(() => {
-    if (auth.currentUser) {
-      const uid = auth.currentUser.uid;
-      AsyncStorage.setItem(`mydana_chat_session_${uid}`, JSON.stringify(messages));
-      AsyncStorage.setItem(`mydana_docs_${uid}`, JSON.stringify(uploadedDocs));
-    }
-  }, [messages, uploadedDocs]);
-
-  // Auth check
-  if (!auth.currentUser) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <Ionicons name="lock-closed" size={32} color={COLORS.secondary} />
-          <Text style={styles.accessTitle}>Log Masuk Diperlukan</Text>
-          <Text style={styles.accessText}>Sila log masuk terlebih dahulu.</Text>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.btnPrimaryText}>Log Masuk Sekarang</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (checkingApp) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Menyemak status permohonan...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Chat handlers
   const handleSend = async () => {
-    if (!inputText.trim() && pendingFiles.length === 0) return;
-    
+    if (!inputText.trim()) return;
+    const userMsg = { id: Date.now().toString(), sender: 'user', role: 'user', text: inputText };
+    const newMsgs = [...messages, userMsg];
+    setMessages(newMsgs);
+    setInputText('');
     setIsTyping(true);
-    let currentMsgs = [...messages];
-    let newDocs = [...uploadedDocs];
-
-    // Upload pending files first
-    if (pendingFiles.length > 0) {
-      for (const file of pendingFiles) {
-        try {
-          // Standard way in Expo and React Native to get a blob from local URI
-          const response = await fetch(file.uri);
-          const blob = await response.blob();
-
-          const fileName = file.name || `file_${Date.now()}`;
-          const type = file.mimeType || 'application/octet-stream';
-          
-          // Using UID in path to match common security rules
-          const storageRef = ref(storage, `documents/${auth.currentUser.uid}/${Date.now()}_${fileName}`);
-          
-          const metadata = { contentType: type };
-          await uploadBytes(storageRef, blob, metadata);
-          const downloadURL = await getDownloadURL(storageRef);
-
-          // Pengecaman Imej AI (Simulasi berasaskan Metadata & Filename)
-          const imgDesc = await callGroqAPI([
-            { role: 'system', content: 'Anda adalah Pakar Pengecaman Imej. Berikan satu baris penerangan ringkas tentang apa yang mungkin ada dalam fail ini berdasarkan namanya. Contoh: "Dokumen Penyata Bank" atau "Gambar Resit Hospital".' },
-            { role: 'user', content: `Nama fail: ${fileName}` }
-          ]);
-
-          newDocs.push({ name: fileName, url: downloadURL, aiDescription: imgDesc });
-          
-          const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: `[Muat naik berhasil: ${fileName}]`, role: 'user' };
-          currentMsgs.push(userMsg);
-          
-          // Slight delay to avoid Rate Limit
-          await new Promise(r => setTimeout(r, 500));
-        } catch (e) {
-          console.error("Upload error", e);
-          Alert.alert('Ralat', `Gagal memproses fail: ${file.name}`);
-        }
-      }
-      setUploadedDocs(newDocs);
-      setPendingFiles([]);
-    }
-
-    if (inputText.trim()) {
-      const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: inputText, role: 'user' };
-      currentMsgs.push(userMsg);
-      setMessages(currentMsgs);
-      setInputText('');
-    } else {
-      setMessages(currentMsgs);
-    }
-
     try {
-      const groqHistory = currentMsgs.map(m => ({ role: m.role, content: m.text }));
-      const reply = await callGroqAPI([{ role: 'system', content: SYSTEM_PROMPT }, ...groqHistory]);
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Pembantu AI MyDana', text: reply, role: 'assistant' }]);
+      const summary = buildSummary(formData);
+      const history = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: `Maklumat borang saya:\n\n${summary}` },
+        ...newMsgs.map(m => ({ role: m.role, content: m.text })),
+      ];
+      const reply = await callGroqAPI(history);
+      const approved = reply.toLowerCase().includes('sah') || reply.toLowerCase().includes('hantar') || reply.toLowerCase().includes('lengkap');
+      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', role: 'assistant', text: reply }]);
+      if (approved) setIsValidated(true);
     } catch (e) {
-      console.error(e);
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Sistem', text: 'Koneksi AI terputus.', role: 'assistant' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', role: 'assistant', text: 'Ralat AI. Sila cuba lagi.' }]);
     } finally {
       setIsTyping(false);
     }
   };
 
-  const handleFilePick = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: true });
-      if (result.canceled) return;
-      setPendingFiles(prev => [...prev, ...result.assets]);
-    } catch (e) { console.error(e); }
-  };
-
-  const handleCamera = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) { Alert.alert('Kebenaran Ditolak', 'Sila benarkan akses kamera.'); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
-    if (result.canceled) return;
-    setPendingFiles(prev => [...prev, result.assets[0]]);
-  };
- 
-  const handleGallery = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-      allowsMultipleSelection: true,
-    });
-    if (result.canceled) return;
-    setPendingFiles(prev => [...prev, ...result.assets]);
-  };
-
-  const proceedWithChat = async (userText) => {
-    const userMsg = { id: Date.now().toString(), sender: 'user', name: 'Pemohon', text: userText, role: 'user' };
-    const newMsgs = [...messages, userMsg];
-    setMessages(newMsgs);
-    try {
-      const groqHistory = newMsgs.map(m => ({ role: m.role, content: m.text }));
-      const reply = await callGroqAPI([{ role: 'system', content: SYSTEM_PROMPT }, ...groqHistory]);
-      setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Pembantu AI MyDana', text: reply, role: 'assistant' }]);
-    } catch (e) { console.error(e); }
-    setIsTyping(false);
-  };
-
-  const handleSubmit = async () => {
-    Alert.alert('Hantar Permohonan', 'Adakah anda pasti?', [
+  const handleSubmit = () => {
+    Alert.alert('Hantar Permohonan', 'Adakah anda pasti untuk menghantar permohonan ini?', [
       { text: 'Batal' },
-      { text: 'Hantar', onPress: async () => {
-        setIsTyping(true);
-        try {
-          const user = auth.currentUser;
-          // REAL AI ANALYSIS
-          const result = await analyzeApplication(messages);
-          
-          const appData = {
-            userId: user.uid,
-            name: user?.displayName || user?.email?.split('@')[0] || 'Pemohon',
-            email: user?.email,
-            summary: result.summary,
-            aiAnalysis: result.analysis,
-            score: result.analysis.skor,
-            scoreClass: result.analysis.skor >= 80 ? 'high' : (result.analysis.skor > 60 ? 'medium' : 'low'),
-            createdAt: serverTimestamp(), 
-            transcript: messages, 
-            documents: uploadedDocs,
-            status: 'pending',
-          };
-          await addDoc(collection(db, 'applications'), appData);
-          setMessages(prev => [...prev, { id: Date.now().toString(), sender: 'bot', name: 'Sistem', text: 'Tahniah! Permohonan anda telah dihantar kepada Panel Pentadbir MyDana!', role: 'assistant' }]);
-          
-          const uid = auth.currentUser.uid;
-          await AsyncStorage.multiRemove([`mydana_chat_session_${uid}`, `mydana_docs_${uid}`]);
-          setExistingApp(appData);
-        } catch (e) {
-          console.error(e);
-          Alert.alert('Ralat', 'Gagal menghantar permohonan.');
-        } finally { setIsTyping(false); }
-      }},
+      {
+        text: 'Hantar', onPress: async () => {
+          setIsSubmitting(true);
+          try {
+            const user = auth.currentUser;
+            const appData = {
+              userId: user.uid,
+              name: formData.namapenuh,
+              email: formData.email,
+              telefon: formData.telefon,
+              alamat: formData.alamat,
+              lokasi: `${formData.bandar}, ${formData.negeri}`,
+              category: formData.kategori,
+              sebab: formData.sebab,
+              jumlah: formData.jumlah,
+              tempoh: `${formData.tarikmula} - ${formData.tarihtamat}`,
+              bank: formData.namabank,
+              noakaun: formData.noakaun,
+              transcript: messages,
+              status: 'pending',
+              score: 70,
+              scoreClass: 'medium',
+              createdAt: serverTimestamp(),
+              summary: {
+                tajuk: `Permohonan ${formData.kategori} - ${formData.namapenuh}`,
+                kategori: formData.kategori,
+                lokasi: `${formData.bandar}, ${formData.negeri}`,
+                sebab: formData.sebab,
+                dana: formData.jumlah,
+                bank: formData.namabank,
+                tempoh: `${formData.tarikmula} - ${formData.tarihtamat}`,
+              },
+              aiAnalysis: {
+                skor: 70,
+                status: 'Perlu Semakan',
+                crossChecking: 'Borang diisi oleh pemohon.',
+                entityExtraction: `Nama: ${formData.namapenuh}, Jumlah: RM${formData.jumlah}`,
+                toneAnalysis: 'Maklumat dari borang.',
+              },
+            };
+            await addDoc(collection(db, 'applications'), appData);
+            Alert.alert('Berjaya!', 'Permohonan anda telah dihantar kepada Admin MyDana.', [
+              { text: 'OK', onPress: () => navigation.goBack() },
+            ]);
+          } catch (e) {
+            console.error(e);
+            Alert.alert('Ralat', 'Gagal menghantar permohonan. Sila cuba lagi.');
+          } finally {
+            setIsSubmitting(false);
+          }
+        },
+      },
     ]);
   };
 
-  const renderMessage = ({ item }) => (
-    <View style={[styles.msgRow, item.sender === 'user' && styles.msgRowUser]}>
-      <View style={[styles.avatar, item.sender === 'user' && styles.avatarUser]}>
-        <Ionicons
-          name={item.sender === 'bot' ? 'chatbubble-ellipses' : 'person'}
-          size={16}
-          color={item.sender === 'bot' ? COLORS.primary : '#fff'}
-        />
+  const renderMsg = ({ item }) => (
+    <View style={[c.msgRow, item.sender === 'user' && c.msgRowUser]}>
+      <View style={[c.avatar, item.sender === 'user' && c.avatarUser]}>
+        <Ionicons name={item.sender === 'bot' ? 'shield-checkmark' : 'person'} size={14}
+          color={item.sender === 'bot' ? COLORS.primary : '#fff'} />
       </View>
-      <View style={[styles.bubble, item.sender === 'user' && styles.bubbleUser]}>
-        <Text style={styles.senderName}>{item.name}</Text>
-        <Text style={[styles.msgText, item.sender === 'user' && { color: '#fff' }]}>{item.text}</Text>
+      <View style={[c.bubble, item.sender === 'user' && c.bubbleUser]}>
+        <Text style={[c.msgText, item.sender === 'user' && { color: '#fff' }]}>{item.text}</Text>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+    <SafeAreaView style={c.safe}>
+      <View style={c.header}>
+        <TouchableOpacity onPress={onBack} style={c.backBtn}>
+          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Pembantu AI MyDana</Text>
-          <View style={styles.onlineRow}>
-            <View style={styles.onlineDot} />
-            <Text style={styles.onlineText}>Dalam talian</Text>
-          </View>
+        <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={c.headerTitle}>Pengesahan AI</Text>
+          <Text style={c.headerSub}>Pegawai Verifikasi MyDana</Text>
         </View>
-        <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textMuted} />
+        <View style={[c.badge, isValidated && c.badgeOk]}>
+          <Text style={c.badgeText}>{isValidated ? '✓ Disahkan' : '⏳ Sedang Semak'}</Text>
+        </View>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={10}
-      >
-        {/* Messages */}
+      {/* Summary Card */}
+      <View style={c.summaryCard}>
+        <Text style={c.summaryTitle}>📋 Ringkasan Maklumat Anda</Text>
+        <Text style={c.summaryText}>{buildSummary(formData)}</Text>
+      </View>
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={10}>
         <FlatList
           ref={flatListRef}
           data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.msgList}
+          renderItem={renderMsg}
+          keyExtractor={item => item.id}
+          contentContainerStyle={c.msgList}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
-          ListFooterComponent={isTyping ? (
-            <Text style={styles.typingText}>Pembantu AI sedang berfikir...</Text>
-          ) : null}
+          ListFooterComponent={isTyping ? <Text style={c.typingText}>Pegawai AI sedang menyemak...</Text> : null}
         />
 
-        {/* Pending Uploads Bar */}
-        {pendingFiles.length > 0 && (
-          <View style={styles.pendingBar}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pendingScroll}>
-              {pendingFiles.map((f, i) => (
-                <View key={i} style={styles.pendingChip}>
-                  {f.mimeType?.startsWith('image') || f.type === 'image' ? (
-                    <Image source={{ uri: f.uri }} style={styles.pendingThumb} />
-                  ) : (
-                    <View style={styles.pendingFileIcon}>
-                      <Ionicons name="document-text" size={20} color={COLORS.primary} />
-                    </View>
-                  )}
-                  <TouchableOpacity 
-                    style={styles.removePending} 
-                    onPress={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
-                  >
-                    <Ionicons name="close-circle" size={18} color={COLORS.error} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Input Bar */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity style={styles.iconBtn} onPress={handleFilePick}>
-            <Feather name="paperclip" size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={handleGallery}>
-            <Ionicons name="images" size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} onPress={handleCamera}>
-            <Feather name="camera" size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
+        <View style={c.inputBar}>
           <TextInput
-            style={styles.chatInput}
-            placeholder="Taip mesej anda..."
+            style={c.chatInput}
+            placeholder="Jawab soalan pegawai atau tambah maklumat..."
             placeholderTextColor={COLORS.textMuted}
             value={inputText}
             onChangeText={setInputText}
             multiline
           />
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+          <TouchableOpacity style={c.sendBtn} onPress={handleSend}>
             <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
 
-        {/* Submit Button */}
-        <TouchableOpacity 
-          style={[styles.submitBtn, messages.length < 10 && { opacity: 0.5, backgroundColor: COLORS.textMuted }]} 
-          onPress={handleSubmit} 
+        <TouchableOpacity
+          style={[c.submitBtn, (!isValidated || isSubmitting) && { opacity: 0.45 }]}
+          onPress={handleSubmit}
+          disabled={!isValidated || isSubmitting}
           activeOpacity={0.85}
-          disabled={messages.length < 10}
         >
-          <Ionicons name="checkmark-circle" size={20} color="#fff" />
-          <Text style={styles.submitBtnText}>
-            {messages.length < 10 ? 'Lengkapkan Chat Dahulu' : 'Selesai & Hantar Permohonan'}
-          </Text>
+          {isSubmitting
+            ? <ActivityIndicator color="#fff" />
+            : <>
+              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Text style={c.submitBtnText}>
+                {isValidated ? 'Hantar Permohonan' : 'Menunggu Pengesahan AI...'}
+              </Text>
+            </>
+          }
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  accessTitle: { fontSize: 20, fontWeight: '700', color: COLORS.text, marginTop: 16 },
-  accessText: { fontSize: 14, color: COLORS.textSecondary, marginVertical: 12, textAlign: 'center' },
-  loadingText: { fontSize: 14, color: COLORS.textMuted, marginTop: 12 },
-  statusCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  statusTitle: { fontSize: 24, fontWeight: '800', marginBottom: 8 },
-  statusDesc: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 24, paddingHorizontal: 20 },
-  btnPrimary: { backgroundColor: COLORS.primary, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 14, marginBottom: 12 },
-  btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  btnOutline: { paddingVertical: 12, paddingHorizontal: 32, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.border },
-  btnOutlineText: { color: COLORS.textSecondary, fontSize: 14, fontWeight: '600' },
+// ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
+export default function ChatScreen({ navigation }) {
+  const [phase, setPhase] = useState('form'); // 'form' | 'chat'
+  const [formData, setFormData] = useState(null);
+
+  if (!auth.currentUser) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Ionicons name="lock-closed" size={32} color={COLORS.secondary} />
+          <Text style={{ color: COLORS.text, marginTop: 12, fontSize: 16 }}>Log Masuk Diperlukan</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (phase === 'form') {
+    return (
+      <ApplicationForm
+        onSubmit={(data, docs) => {
+          setFormData({ ...data, uploadedDocs: docs });
+          setPhase('chat');
+        }}
+      />
+    );
+  }
+
+  return <ChatVerification formData={formData} navigation={navigation} onBack={() => setPhase('form')} />;
+}
+
+// ─── STYLES: FORM ─────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#f0f4ff' },
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingVertical: 16,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  formScroll: { padding: 20, gap: 16 },
+  section: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 18,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    marginBottom: 4,
+  },
+  sectionTitle: { fontSize: 14, fontWeight: '800', color: COLORS.primary, marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldWrap: { marginBottom: 14 },
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
+  hint: { fontSize: 11, color: COLORS.textMuted, marginBottom: 6, fontStyle: 'italic' },
+  input: {
+    backgroundColor: COLORS.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border,
+  },
+  inputMulti: { minHeight: 100, textAlignVertical: 'top' },
+  inputError: { borderColor: COLORS.error, backgroundColor: '#fff5f5' },
+  errorText: { fontSize: 11, color: COLORS.error, marginTop: 4 },
+  row: { flexDirection: 'row' },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  catChip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: COLORS.borderLight, borderWidth: 1, borderColor: COLORS.border,
+  },
+  catChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  catChipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+  catChipTextActive: { color: '#fff', fontWeight: '700' },
+  // Calendar styles
+  calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
+  calNavBtn: { padding: 6 },
+  calMonthLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  calDayRow: { flexDirection: 'row', paddingHorizontal: 10, marginBottom: 4 },
+  calDayHeader: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.textMuted, paddingVertical: 4 },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 8 },
+  calCell: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 100 },
+  calCellSelected: { backgroundColor: COLORS.primary },
+  calCellText: { fontSize: 14, color: COLORS.text },
+  calCellTextSelected: { color: '#fff', fontWeight: '700' },
+  // Upload styles
+  uploadBtnRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 14 },
+  uploadBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 14, borderRadius: 14,
+    backgroundColor: '#eff6ff', borderWidth: 1.5, borderColor: COLORS.primary, borderStyle: 'dashed',
+  },
+  uploadBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  emptyDoc: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  emptyDocText: { fontSize: 13, color: COLORS.textMuted },
+  docList: { gap: 10 },
+  docItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.borderLight, borderRadius: 12, padding: 10,
+  },
+  docThumb: { width: 44, height: 44, borderRadius: 8 },
+  docIcon: { width: 44, height: 44, borderRadius: 8, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center' },
+  docName: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: '500' },
+  docRemoveBtn: { padding: 2 },
+  // Dropdown styles
+  dropdownTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dropdownValue: { fontSize: 14, color: COLORS.text, flex: 1 },
+  dropdownPlaceholder: { fontSize: 14, color: COLORS.textMuted, flex: 1 },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    maxHeight: '70%', paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  modalItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+  },
+  modalItemActive: { backgroundColor: '#eff6ff' },
+  modalItemText: { fontSize: 15, color: COLORS.text },
+  modalItemTextActive: { color: COLORS.primary, fontWeight: '700' },
+  nextBtn: {
+    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 6,
+  },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+});
+
+// ─── STYLES: CHAT ─────────────────────────────────────────────────────────────
+const c = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  headerInfo: { flex: 1 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  onlineDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: COLORS.success },
-  onlineText: { fontSize: 12, color: COLORS.textMuted },
-  msgList: { paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 8 },
-  msgRow: { flexDirection: 'row', marginBottom: 14, alignItems: 'flex-end', gap: 8 },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  headerSub: { fontSize: 11, color: COLORS.textMuted },
+  backBtn: { padding: 4, marginRight: 8 },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: '#fef9c3' },
+  badgeOk: { backgroundColor: '#dcfce7' },
+  badgeText: { fontSize: 11, fontWeight: '700', color: COLORS.text },
+  summaryCard: {
+    margin: 12, padding: 14, backgroundColor: '#eff6ff',
+    borderRadius: 14, borderLeftWidth: 4, borderLeftColor: COLORS.primary,
+  },
+  summaryTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginBottom: 6 },
+  summaryText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
+  msgList: { paddingHorizontal: 14, paddingVertical: 10 },
+  msgRow: { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end', gap: 8 },
   msgRowUser: { flexDirection: 'row-reverse' },
-  avatar: {
-    width: 30, height: 30, borderRadius: 15, backgroundColor: '#e0e7ff',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  avatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#e0e7ff', justifyContent: 'center', alignItems: 'center' },
   avatarUser: { backgroundColor: COLORS.primary },
   bubble: {
-    backgroundColor: COLORS.surface, padding: 12, borderRadius: 16,
-    borderBottomLeftRadius: 4, maxWidth: '78%',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    backgroundColor: '#fff', padding: 12, borderRadius: 16, borderBottomLeftRadius: 4, maxWidth: '80%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
-  bubbleUser: {
-    backgroundColor: COLORS.primary, borderBottomLeftRadius: 16, borderBottomRightRadius: 4,
-  },
-  senderName: { fontSize: 11, fontWeight: '600', color: COLORS.textMuted, marginBottom: 4 },
+  bubbleUser: { backgroundColor: COLORS.primary, borderBottomLeftRadius: 16, borderBottomRightRadius: 4 },
   msgText: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
-  typingText: { fontSize: 13, fontStyle: 'italic', color: COLORS.textMuted, paddingHorizontal: 16, paddingVertical: 8 },
+  typingText: { fontSize: 13, fontStyle: 'italic', color: COLORS.textMuted, paddingHorizontal: 14, paddingBottom: 8 },
   inputBar: {
-    flexDirection: 'row', alignItems: 'flex-end', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8,
-    backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border,
+    flexDirection: 'row', alignItems: 'flex-end', gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: COLORS.border,
   },
-  iconBtn: { padding: 8 },
   chatInput: {
     flex: 1, backgroundColor: COLORS.borderLight, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14,
-    maxHeight: 100, color: COLORS.text,
+    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, maxHeight: 100, color: COLORS.text,
   },
-  sendBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: COLORS.primary,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.success, paddingVertical: 14, marginHorizontal: 12, marginBottom: 8,
-    borderRadius: 14,
+    backgroundColor: '#10b981', paddingVertical: 15, marginHorizontal: 12, marginBottom: 10, borderRadius: 14,
   },
-  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  pendingBar: { backgroundColor: COLORS.surface, borderTopWidth: 1, borderTopColor: COLORS.border, paddingVertical: 10 },
-  pendingScroll: { paddingHorizontal: 12, gap: 10 },
-  pendingChip: { width: 60, height: 60, borderRadius: 10, backgroundColor: COLORS.borderLight, position: 'relative' },
-  pendingThumb: { width: '100%', height: '100%', borderRadius: 10 },
-  pendingFileIcon: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  removePending: { position: 'absolute', top: -8, right: -8, backgroundColor: '#fff', borderRadius: 10 },
+  submitBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });
