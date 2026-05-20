@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   Dimensions, Image, ActivityIndicator, StatusBar, Share, Alert,
@@ -11,12 +11,43 @@ import { db, auth } from '../firebase';
 import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, setDoc, arrayUnion, arrayRemove, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { COLORS } from '../constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Audio } from 'expo-av'; // Kekalkan Audio untuk config jika perlu, Video dibuang
+import { Audio } from 'expo-av';
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 const { width, height } = Dimensions.get('window');
 
-// Placeholder images for categories
+const getDaysRemaining = (tempohStr) => {
+  if (!tempohStr) return Infinity;
+  const parts = tempohStr.split('-');
+  if (parts.length < 2) return Infinity;
+  const endDateStr = parts[1].trim();
+  const dateParts = endDateStr.split('/');
+  if (dateParts.length < 3) return Infinity;
+  const day = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10) - 1;
+  const year = parseInt(dateParts[2], 10);
+
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return Infinity;
+
+  const endDate = new Date(year, month, day);
+  const today = new Date();
+  endDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+
+  const timeDiff = endDate.getTime() - today.getTime();
+  return Math.ceil(timeDiff / (1000 * 3600 * 24));
+};
+
+const TABS = [
+  { id: 'urgent_viral', label: 'MyDana Feed' },
+  { id: 'Rawatan Perubatan', label: 'Perubatan' },
+  { id: 'Pendidikan', label: 'Pendidikan' },
+  { id: 'Bantuan Sara Hidup', label: 'Sara Hidup' },
+  { id: 'Haiwan', label: 'Haiwan' },
+  { id: 'Bencana Alam', label: 'Bencana' },
+  { id: 'Lain-lain', label: 'Lain-lain' },
+];
+
 const CATEGORY_IMAGES = {
   'Perubatan': 'https://images.unsplash.com/photo-1576091160550-217359991f1c?w=800&q=80',
   'Haiwan': 'https://images.unsplash.com/photo-1548191265-cc70d3d45ba1?w=800&q=80',
@@ -31,27 +62,23 @@ const CommentItem = ({ item, onReply, onLike, isReply, parentId }) => {
   const currentUser = auth.currentUser;
 
   useEffect(() => {
-    // Fallback for old comments: if userId is missing, try current user's UID if email matches
     const idToUse = item.userId || (item.user === currentUser?.email ? currentUser.uid : null);
     if (!idToUse) return;
-    
+
     const unsub = onSnapshot(doc(db, 'users', idToUse), (snap) => {
       if (snap.exists()) setCommenter(snap.data());
     });
     return unsub;
-  }, [item.userId, item.user]);
+  }, [item.userId, item.user, currentUser]);
 
   const displayName = commenter?.username ? `@${commenter.username}` : (item.user || 'Pengguna');
-  const displayPhoto = commenter?.photoURL || item.userPhoto;
+  const defaultAvatar = 'https://static.vecteezy.com/system/resources/previews/009/734/564/non_2x/default-avatar-profile-icon-of-social-media-user-vector.jpg';
+  const displayPhoto = commenter?.photoURL || item.userPhoto || defaultAvatar;
 
   return (
     <View style={[styles.commentItem, isReply && styles.replyWrapper]}>
       <View style={[styles.commentAvatar, isReply && styles.replyAvatar]}>
-        {displayPhoto ? (
-          <Image source={{ uri: displayPhoto }} style={styles.commentAvatarImage} />
-        ) : (
-          <Text style={styles.commentAvatarText}>{displayName[0].toUpperCase()}</Text>
-        )}
+        <Image source={{ uri: displayPhoto }} style={styles.commentAvatarImage} />
       </View>
       <View style={styles.commentBody}>
         <Text style={styles.commentUser}>{displayName.startsWith('@') ? displayName : `@${displayName.split('@')[0]}`}</Text>
@@ -129,35 +156,74 @@ const CommentsModal = ({ visible, onClose, campaign, comments, commentText, setC
   </Modal>
 );
 
-const VideoPlayerComponent = ({ uri, isMuted, isScreenFocused }) => {
+const VideoPlayerComponent = ({ uri, isMuted, isScreenFocused, isCurrent, isSlideActive }) => {
+  // Stability Fix: Pass bare URI string as source, modify properties via player instance options
   const player = useVideoPlayer(uri, (p) => {
     p.loop = true;
-    if (isScreenFocused) p.play();
+    // Aggressive playback optimization to reduce pre-play buffering delays
+    p.bufferOptions = {
+      preferredForwardBufferDuration: 1.0,
+      playableDurationToStartPlayback: 0.5,
+    };
   });
 
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(player ? player.playing : false);
+  const [playerStatus, setPlayerStatus] = useState(player ? player.status : 'idle');
+
+  useEffect(() => {
+    if (!player) return;
+    setIsPlaying(player.playing);
+    setPlayerStatus(player.status);
+
+    const playingSub = player.addListener('playingChange', ({ isPlaying: newPlaying }) => {
+      setIsPlaying(newPlaying);
+    });
+
+    const statusSub = player.addListener('statusChange', ({ status: newStatus }) => {
+      setPlayerStatus(newStatus);
+    });
+
+    return () => {
+      playingSub.remove();
+      statusSub.remove();
+    };
+  }, [player]);
 
   useEffect(() => {
     if (!player) return;
     player.muted = isMuted;
-    
-    if (!isScreenFocused) {
-      player.pause();
-      setIsPlaying(false);
+
+    const shouldPlay = isCurrent && isScreenFocused && isSlideActive;
+
+    if (shouldPlay) {
+      if (player.status === 'readyToPlay') {
+        player.play();
+      }
     } else {
-      player.play();
-      setIsPlaying(true);
+      player.pause();
     }
-  }, [isScreenFocused, isMuted, player]);
+
+    const sub = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay' && shouldPlay) {
+        player.play();
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, [isCurrent, isScreenFocused, isSlideActive, isMuted, player]);
 
   const togglePlay = () => {
     if (!player) return;
-    if (player.playing) {
+    if (isPlaying) {
       player.pause();
     } else {
       player.play();
     }
   };
+
+  const isLoading = playerStatus === 'loading' || playerStatus === 'idle';
 
   return (
     <View style={styles.mediaContent}>
@@ -168,30 +234,45 @@ const VideoPlayerComponent = ({ uri, isMuted, isScreenFocused }) => {
         nativeControls={false}
       />
       <TouchableOpacity activeOpacity={1} onPress={togglePlay} style={StyleSheet.absoluteFill} />
-      {!isPlaying && (
+
+      {isLoading ? (
         <View style={styles.playOverlay} pointerEvents="none">
-          <Ionicons name="play" size={60} color="rgba(255,255,255,0.7)" />
+          <ActivityIndicator size="large" color="#fff" />
         </View>
+      ) : (
+        !isPlaying && (
+          <View style={styles.playOverlay} pointerEvents="none">
+            <Ionicons name="play" size={60} color="rgba(255,255,255,0.7)" />
+          </View>
+        )
       )}
     </View>
   );
 };
 
-const VideoSlide = ({ uri, isMuted, isScreenFocused, isActive }) => {
-  if (!isActive) {
+const VideoSlide = ({ uri, isMuted, isScreenFocused, isCurrent, isSlideActive, shouldPreload }) => {
+  if (!shouldPreload) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color={COLORS.primary} />
       </View>
     );
   }
-  return <VideoPlayerComponent uri={uri} isMuted={isMuted} isScreenFocused={isScreenFocused} />;
+  return (
+    <VideoPlayerComponent
+      uri={uri}
+      isMuted={isMuted}
+      isScreenFocused={isScreenFocused}
+      isCurrent={isCurrent}
+      isSlideActive={isSlideActive}
+    />
+  );
 };
 
 const ProgressTimeline = ({ appId }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [previewMedia, setPreviewMedia] = useState(null); 
+  const [previewMedia, setPreviewMedia] = useState(null);
 
   useEffect(() => {
     if (!appId) return;
@@ -287,7 +368,7 @@ const MediaPreviewModal = ({ visible, media, onClose }) => {
 
 const InfoModal = ({ visible, onClose, campaign, navigation }) => {
   const [applicant, setApplicant] = useState(null);
-  
+
   useEffect(() => {
     if (!campaign) return;
     const idToUse = campaign.userId || campaign.uid || campaign.id;
@@ -367,18 +448,21 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
   );
 };
 
-const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFocused, isActive }) => {
+const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFocused, isCurrent, shouldPreload }) => {
   const feed = item.feed || {};
   const [isMuted, setIsMuted] = useState(false);
   const [applicant, setApplicant] = useState(null);
   const [localCommentCount, setLocalCommentCount] = useState(item.commentCount || 0);
+  const [fullscreenVisible, setFullscreenVisible] = useState(false);
+  const [fullscreenIndex, setFullscreenIndex] = useState(0);
+  const fullscreenListRef = useRef(null);
   const currentUserUid = auth.currentUser?.uid;
   const isLiked = item.likedBy?.includes(currentUserUid) || false;
 
   useEffect(() => {
-    const idToUse = item.userId || item.uid || item.id; 
+    const idToUse = item.userId || item.uid || item.id;
     if (!idToUse) return;
-    
+
     const unsub = onSnapshot(doc(db, 'users', idToUse), (snap) => {
       if (snap.exists()) {
         setApplicant(snap.data());
@@ -392,7 +476,7 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
     const unsub = onSnapshot(q, (snap) => {
       let total = 0;
       snap.docs.forEach(docSnap => {
-        total += 1; 
+        total += 1;
         const cData = docSnap.data();
         if (cData.replies && Array.isArray(cData.replies)) {
           total += cData.replies.length;
@@ -451,13 +535,11 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
     if (onOpenInfo) onOpenInfo(item);
   };
 
-  // GABUNGKAN SEMUA MEDIA (Video + Gambar)
   const allMedia = [];
   if (feed.video) allMedia.push({ type: 'video', uri: feed.video });
   if (feed.images) {
     feed.images.forEach(uri => allMedia.push({ type: 'image', uri }));
   }
-  // Jika tiada media langsung, guna placeholder
   if (allMedia.length === 0) {
     allMedia.push({ type: 'image', uri: CATEGORY_IMAGES[item.summary?.kategori] || CATEGORY_IMAGES['Umum'] });
   }
@@ -478,10 +560,17 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
     }
   };
 
-  const renderMediaItem = ({ item: media }) => (
+  const renderMediaItem = ({ item: media, index: mediaIndex }) => (
     <View style={styles.mediaSlide}>
       {media.type === 'video' ? (
-        <VideoSlide uri={media.uri} isMuted={isMuted} isScreenFocused={isScreenFocused} />
+        <VideoSlide
+          uri={media.uri}
+          isMuted={isMuted}
+          isScreenFocused={isScreenFocused}
+          isCurrent={isCurrent}
+          isSlideActive={currentIndex === mediaIndex}
+          shouldPreload={shouldPreload}
+        />
       ) : (
         <Image source={{ uri: media.uri }} style={styles.mediaContent} />
       )}
@@ -528,7 +617,14 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
           pointerEvents="none"
         />
 
-        {/* Side Actions */}
+        <TouchableOpacity
+          style={styles.expandBtn}
+          onPress={() => { setFullscreenIndex(currentIndex); setFullscreenVisible(true); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="expand-outline" size={22} color="#fff" />
+        </TouchableOpacity>
+
         <View style={styles.sideActions} pointerEvents="box-none">
           <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
             <Ionicons name={isLiked ? "heart" : "heart-outline"} size={32} color={isLiked ? "#ef4444" : "#fff"} />
@@ -542,12 +638,8 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
             <Ionicons name="share-social" size={28} color="#fff" />
             <Text style={styles.actionText}>Kongsi</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setIsMuted(!isMuted)}>
-            <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={26} color="#fff" />
-          </TouchableOpacity>
         </View>
 
-        {/* Bottom Content */}
         <View style={styles.bottomContent} pointerEvents="box-none">
           <View style={styles.applicantRow}>
             <View style={styles.avatarMini}>
@@ -562,12 +654,10 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
               <Ionicons name="checkmark-circle" size={14} color="#3b82f6" />
             </View>
           </View>
+          <Text style={styles.campaignTitle}>{item.summary?.tajuk || 'Kempen MyDana'}</Text>
+
 
           <TouchableOpacity onPress={handleOpenInfo} activeOpacity={0.8} style={{ marginBottom: 12 }}>
-            <Text style={styles.campaignTitle}>{item.summary?.tajuk || 'Kempen MyDana'}</Text>
-            <Text style={styles.campaignDesc} numberOfLines={2}>
-              {feed.description || item.summary?.sebab || 'Bantu saya mencukupi dana untuk keperluan mendesak ini.'}
-            </Text>
             <Text style={styles.readMoreText}>Baca sepenuhnya & lihat info dana...</Text>
           </TouchableOpacity>
 
@@ -599,19 +689,113 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={fullscreenVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setFullscreenVisible(false)}
+      >
+        <View style={styles.fullscreenBackdrop}>
+          <TouchableOpacity
+            style={styles.fullscreenCloseBtn}
+            onPress={() => setFullscreenVisible(false)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close" size={28} color="#fff" />
+          </TouchableOpacity>
+
+          <FlatList
+            ref={fullscreenListRef}
+            data={allMedia}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={fullscreenIndex}
+            getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            keyExtractor={(_, i) => `fs-${i}`}
+            renderItem={({ item: media }) => (
+              <View style={styles.fullscreenSlide}>
+                {media.type === 'video' ? (
+                  <VideoPlayerComponent
+                    uri={media.uri}
+                    isMuted={isMuted}
+                    isScreenFocused={true}
+                    isCurrent={true}
+                    isSlideActive={true}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: media.uri }}
+                    style={styles.fullscreenMedia}
+                    resizeMode="contain"
+                  />
+                )}
+              </View>
+            )}
+          />
+
+          {allMedia.length > 1 && (
+            <View style={styles.fullscreenIndicator}>
+              <Text style={styles.fullscreenIndicatorText}>
+                {fullscreenIndex + 1} / {allMedia.length}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default function MainPageScreen({ navigation }) {
   const [campaigns, setCampaigns] = useState([]);
+  const [activeTab, setActiveTab] = useState('urgent_viral');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
   const currentUser = auth.currentUser;
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
 
-  // Fetch Current User Details from Firestore
+  const filteredCampaigns = useMemo(() => {
+    if (activeTab === 'urgent_viral') {
+      const urgentOrViral = campaigns.filter(item => {
+        const tempoh = item.summary?.tempoh || item.tempoh;
+        const daysRemaining = getDaysRemaining(tempoh);
+        const likes = item.likeCount || 0;
+        const comments = item.commentCount || 0;
+
+        const isUrgent = daysRemaining >= 0 && daysRemaining <= 7;
+        const isViral = likes >= 2 || comments >= 1;
+
+        return isUrgent || isViral;
+      });
+      return urgentOrViral.length > 0 ? urgentOrViral : campaigns;
+    } else {
+      return campaigns.filter(item => {
+        const cat = item.summary?.kategori || item.category;
+        return cat === activeTab;
+      });
+    }
+  }, [campaigns, activeTab]);
+
+  const finalCampaigns = useMemo(() => {
+    let list = filteredCampaigns;
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(item => {
+        const title = (item.summary?.tajuk || '').toLowerCase();
+        const sebab = (item.summary?.sebab || '').toLowerCase();
+        const desc = (item.feed?.description || '').toLowerCase();
+        const creator = (item.name || '').toLowerCase();
+        return title.includes(q) || sebab.includes(q) || desc.includes(q) || creator.includes(q);
+      });
+    }
+    return list;
+  }, [filteredCampaigns, searchQuery]);
+
   useEffect(() => {
     if (!currentUser) return;
     const unsub = onSnapshot(doc(db, 'users', currentUser.uid), (snap) => {
@@ -647,7 +831,6 @@ export default function MainPageScreen({ navigation }) {
     setInfoModalVisible(true);
   };
 
-  // Listen to comments sub-collection when modal is open
   useEffect(() => {
     if (!activeCampaign || !commentModalVisible) return;
     const q = query(collection(db, 'applications', activeCampaign.id, 'comments'), orderBy('createdAt', 'desc'));
@@ -664,7 +847,7 @@ export default function MainPageScreen({ navigation }) {
 
       try {
         const campaignRef = doc(db, 'applications', activeCampaign.id);
-        
+
         if (replyingTo) {
           const commentRef = doc(db, 'applications', activeCampaign.id, 'comments', replyingTo.id);
           await updateDoc(commentRef, {
@@ -689,8 +872,7 @@ export default function MainPageScreen({ navigation }) {
             replies: [],
             createdAt: serverTimestamp()
           });
-          
-          // Increment global comment count on campaign
+
           await updateDoc(campaignRef, {
             commentCount: (activeCampaign.commentCount || 0) + 1
           });
@@ -780,30 +962,78 @@ export default function MainPageScreen({ navigation }) {
     <View style={styles.safe}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Absolute Header Overlay */}
-      <View style={[styles.headerOverlay, { top: Math.max(insets.top, 20) + 10 }]}>
-        <Text style={styles.headerTitle}>MyDana Feed</Text>
+      <View style={[styles.headerOverlay, { top: Math.max(insets.top, 20) + 5, flexDirection: 'column', alignItems: 'stretch' }]}>
+        <View style={styles.searchRow}>
+          <View style={styles.searchBarContainer}>
+            <Ionicons name="search" size={18} color="rgba(7, 1, 1, 1)" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Cari kempen..."
+              placeholderTextColor="rgba(6, 2, 2, 1)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearBtn} activeOpacity={0.7}>
+                <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.6)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScroll}
+          style={styles.categoryBar}
+          keyboardShouldPersistTaps="handled"
+        >
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.categoryTab, isActive && styles.categoryTabActive]}
+                onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.categoryTabText, isActive && styles.categoryTabTextActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {campaigns.length === 0 ? (
+      {finalCampaigns.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="document-text-outline" size={60} color={COLORS.textMuted} />
           <Text style={styles.emptyTitle}>Tiada Kempen Aktif</Text>
-          <Text style={styles.emptyText}>Belum ada kempen yang diluluskan buat masa ini.</Text>
+          <Text style={styles.emptyText}>
+            {searchQuery ? "Tiada kempen sepadan dengan carian anda." : "Belum ada kempen untuk kategori ini."}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={campaigns}
-          renderItem={({ item }) => (
-            <CampaignItem 
-              item={item} 
-              navigation={navigation} 
-              onOpenComments={handleOpenComments} 
-              onOpenInfo={handleOpenInfo} 
-              isScreenFocused={isFocused} 
-              isActive={viewableItems.includes(item.id)}
-            />
-          )}
+          data={finalCampaigns}
+          renderItem={({ item, index }) => {
+            const isCurrent = viewableItems.includes(item.id) || (viewableItems.length === 0 && index === 0);
+            const activeIndex = finalCampaigns.findIndex(c => viewableItems.includes(c.id));
+            const shouldPreload = isCurrent || index === activeIndex + 1 || (viewableItems.length === 0 && index === 1);
+            return (
+              <CampaignItem
+                item={item}
+                navigation={navigation}
+                onOpenComments={handleOpenComments}
+                onOpenInfo={handleOpenInfo}
+                isScreenFocused={isFocused}
+                isCurrent={isCurrent}
+                shouldPreload={shouldPreload}
+              />
+            );
+          }}
           keyExtractor={item => item.id}
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -819,7 +1049,6 @@ export default function MainPageScreen({ navigation }) {
         />
       )}
 
-      {/* Info Modal */}
       <InfoModal
         visible={infoModalVisible}
         onClose={() => setInfoModalVisible(false)}
@@ -827,7 +1056,6 @@ export default function MainPageScreen({ navigation }) {
         navigation={navigation}
       />
 
-      {/* Comments Modal */}
       <CommentsModal
         visible={commentModalVisible}
         onClose={() => { setCommentModalVisible(false); setReplyingTo(null); }}
@@ -850,21 +1078,83 @@ const styles = StyleSheet.create({
   center: { justifyContent: 'center', alignItems: 'center' },
   headerOverlay: {
     position: 'absolute', width: '100%', zIndex: 10,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 20,
+  },
+  categoryBar: {
+    marginTop: 4,
+  },
+  categoryScroll: {
+    gap: 8,
+    paddingRight: 40,
+  },
+  categoryTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  categoryTabActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  categoryTabText: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  categoryTabTextActive: {
+    color: '#fff',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    width: '100%',
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(250, 253, 254, 1)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(198, 181, 181, 0.15)',
+    paddingHorizontal: 16,
+    height: 40,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#150202ff',
+    fontSize: 14,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  clearBtn: {
+    padding: 4,
   },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: 1 },
   adminIcon: { position: 'absolute', right: 20 },
   campaignContainer: {
     width: width,
     height: height - 110,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingTop: 160,
+    paddingBottom: 10,
   },
   cardContainer: {
     width: width * 0.95,
-    height: '100%',
+    height: height - 250,
     backgroundColor: '#1a1a1a',
     borderRadius: 24,
     overflow: 'hidden',
@@ -883,7 +1173,7 @@ const styles = StyleSheet.create({
   },
   arrowBtn: {
     position: 'absolute',
-    top: '38%',
+    top: '36%',
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -1025,4 +1315,59 @@ const styles = StyleSheet.create({
   adminBadge: { backgroundColor: COLORS.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 },
   adminBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
   adminReportContent: { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' },
+  expandBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 6,
+  },
+  fullscreenBackdrop: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenSlide: {
+    width: width,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  fullscreenMedia: {
+    width: '100%',
+    height: '100%',
+  },
+  fullscreenIndicator: {
+    position: 'absolute',
+    bottom: 50,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  fullscreenIndicatorText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

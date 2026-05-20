@@ -30,8 +30,14 @@ export default function RegisterScreen({ navigation }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, emel, password);
       const user = userCredential.user;
+
+      // Auto-generate username from name
+      const baseUsername = nama.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const randomSuffix = Math.floor(100 + Math.random() * 900);
+      const username = `${baseUsername || 'user'}${randomSuffix}`;
+
       await setDoc(doc(db, 'users', user.uid), {
-        nama, emel, telefon, role: 'user', createdAt: serverTimestamp(),
+        nama, emel, telefon, role: 'user', username, createdAt: serverTimestamp(),
       });
       setSuccess('Akaun berjaya didaftar!');
       Alert.alert('Berjaya', 'Akaun anda berjaya didaftar!');

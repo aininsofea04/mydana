@@ -11,41 +11,41 @@ import { COLORS } from '../constants';
 export default function PaymentScreen({ route, navigation }) {
   const { campaign } = route.params || {};
   const [loading, setLoading] = useState(false);
-  const [amount, setAmount] = useState('20'); 
+  const [amount, setAmount] = useState('20');
   const [customAmount, setCustomAmount] = useState('');
   const [isOtherSelected, setIsOtherSelected] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('fpx');
-  
+
   const inputRef = useRef(null);
   const presetAmounts = ['20', '25', '40', '60', '100'];
 
   const handlePay = async () => {
     const finalAmount = isOtherSelected ? customAmount : amount;
     const amountNum = parseFloat(finalAmount);
-    
+
     if (isNaN(amountNum) || amountNum <= 0) {
       Alert.alert('Ralat', 'Sila masukkan jumlah sumbangan yang sah.');
       return;
     }
 
     setLoading(true);
-    
+
     try {
       const amountCents = Math.round(amountNum * 100);
       const campName = campaign?.name || campaign?.summary?.tajuk || 'Kempen MyDana';
       const BACKEND_URL = 'https://SILA-GANTI-DENGAN-URL-FIREBASE-FUNCTIONS-ANDA.a.run.app';
-      
+
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           amount: amountCents,
           campaignName: campName,
           donorName: 'Penyumbang MyDana',
           donorEmail: 'user@example.com'
         })
       });
-      
+
       const responseText = await response.text();
       let data;
       try {
@@ -86,7 +86,7 @@ export default function PaymentScreen({ route, navigation }) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          
+
           {/* Main Amount Display (Now supports interactive input when 'Other' is active) */}
           <View style={[styles.amountDisplayBox, isOtherSelected && styles.amountDisplayBoxActive]}>
             <Text style={styles.amountDisplayCurrency}>RM</Text>
@@ -119,7 +119,7 @@ export default function PaymentScreen({ route, navigation }) {
                 }}
               >
                 <Text style={[styles.gridText, amount === val && !isOtherSelected && styles.gridTextActive]}>
-                  RM <Text style={{fontSize: 20}}>{val}</Text>
+                  RM <Text style={{ fontSize: 20 }}>{val}</Text>
                 </Text>
               </TouchableOpacity>
             ))}
@@ -137,9 +137,9 @@ export default function PaymentScreen({ route, navigation }) {
           </View>
 
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Kaedah Pembayaran</Text>
-          
+
           {/* FPX */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.methodCard, paymentMethod === 'fpx' && styles.methodCardActive]}
             onPress={() => setPaymentMethod('fpx')}
           >
@@ -150,12 +150,12 @@ export default function PaymentScreen({ route, navigation }) {
               <Text style={styles.methodName}>Perbankan Dalam Talian (FPX)</Text>
             </View>
             <View style={styles.methodLogo}>
-               <Text style={styles.logoText}>FPX</Text>
+              <Text style={styles.logoText}>FPX</Text>
             </View>
           </TouchableOpacity>
 
           {/* Card */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.methodCard, paymentMethod === 'card' && styles.methodCardActive]}
             onPress={() => setPaymentMethod('card')}
           >
@@ -169,7 +169,7 @@ export default function PaymentScreen({ route, navigation }) {
           </TouchableOpacity>
 
           {/* E-Wallet */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.methodCard, paymentMethod === 'wallet' && styles.methodCardActive]}
             onPress={() => setPaymentMethod('wallet')}
           >
@@ -194,7 +194,7 @@ export default function PaymentScreen({ route, navigation }) {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.confirmBtnText}>
-                TOP UP · RM{parseFloat(currentDisplayAmount || 0).toFixed(0)}
+                SUMBANG · RM{parseFloat(currentDisplayAmount || 0).toFixed(0)}
               </Text>
             )}
           </TouchableOpacity>
@@ -250,14 +250,14 @@ const styles = StyleSheet.create({
   radioActive: { borderColor: '#3b82f6' },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3b82f6' },
   methodName: { fontSize: 14, fontWeight: '700', color: '#334155' },
-  
+
   methodLogo: { backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   logoText: { fontSize: 10, fontWeight: '800', color: '#94a3b8' },
   miniLogo: { backgroundColor: '#f1f5f9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
   miniLogoText: { fontSize: 8, fontWeight: '800', color: '#94a3b8' },
 
   confirmBtn: {
-    backgroundColor: '#0ea5e9', height: 60, borderRadius: 12, 
+    backgroundColor: '#0ea5e9', height: 60, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center', marginTop: 20,
     shadowColor: '#0ea5e9', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 4
   },

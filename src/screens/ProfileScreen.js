@@ -56,11 +56,11 @@ export default function ProfileScreen({ navigation }) {
   const fetchProfile = async (currentUser) => {
     try {
       // Use onSnapshot for real-time profile updates
-      const unsubUser = onSnapshot(doc(db, 'users', currentUser.uid), (snap) => {
+      const unsubUser = onSnapshot(doc(db, 'users', currentUser.uid), async (snap) => {
         if (snap.exists()) {
           const data = snap.data();
           setUser(data);
-          
+
           const dbEmail = data.emel || data.email || currentUser.email;
           const dbName = data.nama || data.name || currentUser.displayName;
           const dbPhone = data.telefon || data.phone || data.nomborTelefon || '';
@@ -68,7 +68,23 @@ export default function ProfileScreen({ navigation }) {
           setNama(dbName || '');
           setEmel(dbEmail || '');
           setTelefon(dbPhone || '');
-          setUsername(data.username || '');
+
+          let dbUsername = data.username;
+          if (!dbUsername && dbName) {
+            // Generate a username on the fly
+            const baseUsername = dbName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const randomSuffix = Math.floor(100 + Math.random() * 900);
+            dbUsername = `${baseUsername || 'user'}${randomSuffix}`;
+
+            // Save it back to database automatically so they now have a username
+            try {
+              await updateDoc(doc(db, 'users', currentUser.uid), { username: dbUsername });
+            } catch (err) {
+              console.warn("Failed to auto-save username:", err);
+            }
+          }
+
+          setUsername(dbUsername || '');
           setJantina(data.jantina || '');
           setAlamat(data.alamat || '');
 
@@ -196,8 +212,8 @@ export default function ProfileScreen({ navigation }) {
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.topLogoutBtn} 
+          <TouchableOpacity
+            style={styles.topLogoutBtn}
             onPress={() => Alert.alert('Log Keluar', 'Adakah anda pasti ingin log keluar?', [
               { text: 'Batal', style: 'cancel' },
               { text: 'Log Keluar', onPress: () => signOut(auth), style: 'destructive' }
@@ -208,7 +224,7 @@ export default function ProfileScreen({ navigation }) {
 
           <TouchableOpacity onPress={pickImage} style={styles.avatarWrapper}>
             <Image
-              source={{ uri: user?.photoURL || 'https://images.unsplash.com/photo-1511367461989-f85a21fda167?w=400&q=80' }}
+              source={{ uri: user?.photoURL || 'https://static.vecteezy.com/system/resources/previews/009/734/564/non_2x/default-avatar-profile-icon-of-social-media-user-vector.jpg' }}
               style={styles.avatar}
             />
             {updating ? (
@@ -229,7 +245,7 @@ export default function ProfileScreen({ navigation }) {
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.liked}</Text>
-            <Text style={styles.statLabel}>Liked Posts</Text>
+            <Text style={styles.statLabel}>Disukai</Text>
           </View>
           <View style={[styles.statCard, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e2e8f0' }]}>
             <Text style={styles.statValue}>RM {stats.totalDonated}</Text>
@@ -237,7 +253,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{stats.campaigns}</Text>
-            <Text style={styles.statLabel}>Dibantu</Text>
+            <Text style={styles.statLabel}>Kempen Dibantu</Text>
           </View>
         </View>
 
@@ -290,13 +306,13 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={styles.label}>Jantina</Text>
                   {isEditing ? (
                     <View style={styles.dropdownRow}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[styles.dropdownItem, jantina === 'Lelaki' && styles.dropdownItemActive]}
                         onPress={() => setJantina('Lelaki')}
                       >
                         <Text style={[styles.dropdownItemText, jantina === 'Lelaki' && styles.dropdownItemTextActive]}>Lelaki</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={[styles.dropdownItem, jantina === 'Perempuan' && styles.dropdownItemActive]}
                         onPress={() => setJantina('Perempuan')}
                       >
@@ -311,11 +327,11 @@ export default function ProfileScreen({ navigation }) {
 
               <Text style={styles.label}>Nombor Telefon</Text>
               {isEditing ? (
-                <TextInput 
-                  style={styles.input} 
-                  value={telefon} 
-                  onChangeText={(val) => setTelefon(val.replace(/[^0-9]/g, ''))} 
-                  keyboardType="phone-pad" 
+                <TextInput
+                  style={styles.input}
+                  value={telefon}
+                  onChangeText={(val) => setTelefon(val.replace(/[^0-9]/g, ''))}
+                  keyboardType="phone-pad"
                   placeholder="Contoh: 0123456789"
                 />
               ) : (
@@ -405,9 +421,9 @@ const styles = StyleSheet.create({
   usernamePrefix: { fontSize: 14, fontWeight: '800', color: '#3b82f6', marginRight: 4 },
   usernameInput: { flex: 1, paddingVertical: 12, fontSize: 14, color: '#1e293b', fontWeight: '700' },
   dropdownRow: { flexDirection: 'row', gap: 10 },
-  dropdownItem: { 
-    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', 
-    borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff' 
+  dropdownItem: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff'
   },
   dropdownItemActive: { borderColor: '#3b82f6', backgroundColor: '#eff6ff' },
   dropdownItemText: { fontSize: 14, fontWeight: '700', color: '#64748b' },
