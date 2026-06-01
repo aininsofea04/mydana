@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView,
   ActivityIndicator, Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
 import { collection, query, where, orderBy, onSnapshot, getDoc, doc } from 'firebase/firestore';
@@ -206,6 +207,7 @@ export default function StatusScreen({ navigation }) {
               <Ionicons name="megaphone-outline" size={18} color="#fff" />
               <Text style={styles.createBtnText}>Lapor Perkembangan</Text>
             </TouchableOpacity>
+
           </View>
         )}
 

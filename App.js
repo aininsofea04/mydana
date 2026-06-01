@@ -25,6 +25,7 @@ import ApplyHubScreen from './src/screens/ApplyHubScreen';
 import InboxScreen from './src/screens/InboxScreen';       
 import DirectMessageScreen from './src/screens/DirectMessageScreen';
 import CreateProgressReportScreen from './src/screens/CreateProgressReportScreen';
+import LiveStreamScreen from './src/screens/LiveStreamScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -129,6 +130,7 @@ export default function App() {
               <Stack.Screen name="Status" component={StatusScreen} />
               <Stack.Screen name="DirectMessage" component={DirectMessageScreen} />
               <Stack.Screen name="CreateProgressReport" component={CreateProgressReportScreen} />
+              <Stack.Screen name="LiveStream" component={LiveStreamScreen} />
             </>
           )}
         </Stack.Navigator>

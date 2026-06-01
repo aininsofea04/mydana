@@ -13,19 +13,43 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mydana.app"
+      "bundleIdentifier": "com.mydana.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MyDana memerlukan akses kamera untuk siaran langsung",
+        "NSMicrophoneUsageDescription": "MyDana memerlukan akses mikrofon untuk siaran langsung"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#3b82f6"
       },
-      "package": "com.mydana.app"
+      "package": "com.mydana.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-font",
       "expo-asset",
       "expo-web-browser",
-      "expo-video"
-    ]
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MyDana memerlukan akses kamera untuk siaran langsung"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c6bde860-ba87-431c-8001-c39e2d70326f"
+      }
+    }
   }
 }

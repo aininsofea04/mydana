@@ -33,6 +33,7 @@ export default function ProfileScreen({ navigation }) {
 
   const [stats, setStats] = useState({ liked: 0, totalDonated: 0, campaigns: 0 });
   const [history, setHistory] = useState([]);
+  const [myCampaigns, setMyCampaigns] = useState([]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -110,6 +111,20 @@ export default function ProfileScreen({ navigation }) {
         totalDonated: totalRM,
         campaigns: uniqueCampaigns
       }));
+
+      // Fetch User's Created Campaigns
+      const campaignSnap = await getDocs(query(collection(db, 'applications'), where('userId', '==', currentUser.uid)));
+      let campaignList = campaignSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Legacy fallback: check for doc with ID == user.uid
+      const legacySnap = await getDoc(doc(db, 'applications', currentUser.uid));
+      if (legacySnap.exists()) {
+        const legacyData = { id: legacySnap.id, ...legacySnap.data() };
+        if (!campaignList.find(a => a.id === legacyData.id)) {
+          campaignList.push(legacyData);
+        }
+      }
+      setMyCampaigns(campaignList);
 
     } catch (e) {
       console.error("Profile fetch error:", e);
@@ -259,10 +274,13 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={styles.tabContainer}>
           <TouchableOpacity style={[styles.tab, activeTab === 'info' && styles.tabActive]} onPress={() => setActiveTab('info')}>
-            <Text style={[styles.tabText, activeTab === 'info' && styles.tabTextActive]}>Maklumat Peribadi</Text>
+            <Text style={[styles.tabText, activeTab === 'info' && styles.tabTextActive]}>Maklumat</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.tab, activeTab === 'history' && styles.tabActive]} onPress={() => setActiveTab('history')}>
-            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>Sejarah Sumbangan</Text>
+            <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>Sejarah</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.tab, activeTab === 'campaigns' && styles.tabActive]} onPress={() => setActiveTab('campaigns')}>
+            <Text style={[styles.tabText, activeTab === 'campaigns' && styles.tabTextActive]}>Kempen Saya</Text>
           </TouchableOpacity>
         </View>
 
@@ -351,7 +369,7 @@ export default function ProfileScreen({ navigation }) {
                 </TouchableOpacity>
               )}
             </View>
-          ) : (
+          ) : activeTab === 'history' ? (
             <View>
               {history.length === 0 ? (
                 <View style={styles.emptyHistory}>
@@ -359,18 +377,66 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={styles.emptyText}>Tiada sejarah sumbangan ditemui.</Text>
                 </View>
               ) : (
-                history.map((item) => (
-                  <View key={item.id} style={styles.historyCard}>
+                history.map((item) => {
+                  const txStatus = item.status || 'completed';
+                  const isSuccess = txStatus === 'completed' || txStatus === 'succeeded';
+                  const dateStr = item.createdAt?.toDate ? item.createdAt.toDate().toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+                  
+                  return (
+                    <View key={item.id} style={styles.historyCard}>
+                      {/* Top row: Campaign name + Status */}
+                      <View style={styles.historyTopRow}>
+                        <View style={styles.historyIconCircle}>
+                          <Ionicons name="heart" size={16} color="#3b82f6" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={styles.historyTitle} numberOfLines={1}>{item.campaignName || 'Kempen MyDana'}</Text>
+                          <Text style={styles.historyDate}>{dateStr}</Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: isSuccess ? '#dcfce7' : '#fef2f2' }]}>
+                          <Text style={[styles.statusBadgeText, { color: isSuccess ? '#16a34a' : '#dc2626' }]}>
+                            {isSuccess ? 'BERJAYA' : 'GAGAL'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Bottom row: Amount + Receipt */}
+                      <View style={styles.historyBottomRow}>
+                        <Text style={styles.historyAmount}>RM {(item.amount || 0).toFixed(2)}</Text>
+                        <TouchableOpacity style={styles.receiptBtn} onPress={() => printReceipt(item)}>
+                          <Feather name="file-text" size={14} color="#3b82f6" />
+                          <Text style={styles.receiptBtnText}>Resit</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          ) : (
+            <View>
+              {myCampaigns.length === 0 ? (
+                <View style={styles.emptyHistory}>
+                  <Feather name="folder" size={40} color="#cbd5e1" />
+                  <Text style={styles.emptyText}>Anda belum mempunyai sebarang kempen.</Text>
+                </View>
+              ) : (
+                myCampaigns.map((app) => (
+                  <View key={app.id} style={styles.historyCard}>
                     <View style={styles.historyInfo}>
-                      <Text style={styles.historyTitle}>{item.campaignName}</Text>
-                      <Text style={styles.historyDate}>{item.createdAt?.toDate().toLocaleDateString()}</Text>
+                      <Text style={styles.historyTitle}>{app.summary?.tajuk || 'Permohonan Dana'}</Text>
+                      <Text style={styles.historyDate}>Status: {app.status === 'approved' ? 'Diluluskan' : app.status === 'rejected' ? 'Ditolak' : 'Dalam Semakan'}</Text>
                     </View>
                     <View style={styles.historyAction}>
-                      <Text style={styles.historyAmount}>RM {item.amount}</Text>
-                      <TouchableOpacity style={styles.receiptBtn} onPress={() => printReceipt(item)}>
-                        <Feather name="printer" size={14} color="#3b82f6" />
-                        <Text style={styles.receiptBtnText}>Resit</Text>
-                      </TouchableOpacity>
+                      {app.status === 'approved' && app.isPublished && (
+                        <TouchableOpacity 
+                          style={[styles.receiptBtn, { backgroundColor: '#ef4444', padding: 8, borderRadius: 8, marginTop: 0 }]} 
+                          onPress={() => navigation.navigate('LiveStream', { mode: 'broadcaster', campaign: app })}
+                        >
+                          <Ionicons name="videocam" size={16} color="#fff" />
+                          <Text style={[styles.receiptBtnText, { color: '#fff', marginLeft: 4 }]}>Siar Langsung</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ))
@@ -430,13 +496,18 @@ const styles = StyleSheet.create({
   dropdownItemTextActive: { color: '#3b82f6' },
   saveBtn: { backgroundColor: '#3b82f6', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 30, shadowColor: '#3b82f6', shadowOpacity: 0.2, shadowRadius: 10, elevation: 4 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  historyCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
+  historyCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f1f5f9' },
+  historyTopRow: { flexDirection: 'row', alignItems: 'center' },
+  historyIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#eff6ff', justifyContent: 'center', alignItems: 'center' },
   historyInfo: { flex: 1 },
   historyTitle: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
-  historyDate: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
+  historyDate: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  statusBadgeText: { fontSize: 10, fontWeight: '800' },
+  historyBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   historyAction: { alignItems: 'flex-end' },
-  historyAmount: { fontSize: 15, fontWeight: '800', color: '#10b981' },
-  receiptBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  historyAmount: { fontSize: 17, fontWeight: '800', color: '#10b981' },
+  receiptBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   receiptBtnText: { fontSize: 12, fontWeight: '700', color: '#3b82f6' },
   emptyHistory: { alignItems: 'center', paddingVertical: 50 },
   emptyText: { color: '#94a3b8', fontSize: 14, marginTop: 10 },

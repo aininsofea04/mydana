@@ -617,6 +617,21 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
           pointerEvents="none"
         />
 
+        {item.isLive && (
+          <TouchableOpacity 
+            style={styles.liveBadgeOverlay} 
+            onPress={() => navigation.navigate('LiveStream', { mode: 'viewer', campaign: item })}
+            activeOpacity={0.8}
+          >
+            <View style={styles.liveBadgeDot} />
+            <Text style={styles.liveBadgeText}>LIVE</Text>
+            <View style={styles.viewerBadgeSmall}>
+               <Ionicons name="eye" size={10} color="#fff" />
+               <Text style={styles.viewerBadgeText}>{item.liveViewerCount || 0}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.expandBtn}
           onPress={() => { setFullscreenIndex(currentIndex); setFullscreenVisible(true); }}
@@ -1368,6 +1383,48 @@ const styles = StyleSheet.create({
   fullscreenIndicatorText: {
     color: '#fff',
     fontSize: 13,
+    fontWeight: '700',
+  },
+  liveBadgeOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    zIndex: 10,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+  },
+  liveBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ef4444',
+  },
+  liveBadgeText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  viewerBadgeSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 2,
+    marginLeft: 2,
+  },
+  viewerBadgeText: {
+    color: '#fff',
+    fontSize: 10,
     fontWeight: '700',
   },
 });

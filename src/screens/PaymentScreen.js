@@ -5,8 +5,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { COLORS } from '../constants';
+import { db, auth } from '../firebase';
+import { doc, addDoc, collection, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function PaymentScreen({ route, navigation }) {
   const { campaign } = route.params || {};
@@ -31,44 +32,45 @@ export default function PaymentScreen({ route, navigation }) {
     setLoading(true);
 
     try {
-      const amountCents = Math.round(amountNum * 100);
+      const currentUser = auth.currentUser;
       const campName = campaign?.name || campaign?.summary?.tajuk || 'Kempen MyDana';
-      const BACKEND_URL = 'https://SILA-GANTI-DENGAN-URL-FIREBASE-FUNCTIONS-ANDA.a.run.app';
 
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amountCents,
-          campaignName: campName,
-          donorName: 'Penyumbang MyDana',
-          donorEmail: 'user@example.com'
-        })
+      // Demo mode: Save donation directly to Firestore
+      await addDoc(collection(db, 'donations'), {
+        userId: currentUser?.uid || 'anonymous',
+        userName: currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Penyumbang',
+        userEmail: currentUser?.email || 'demo@mydana.com',
+        campaignId: campaign?.id || '',
+        campaignName: campName,
+        amount: amountNum,
+        paymentMethod: paymentMethod,
+        status: 'completed',
+        isDemo: true,
+        createdAt: serverTimestamp(),
       });
 
-      const responseText = await response.text();
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error(`Ralat pelayan:\n${responseText.substring(0, 100)}`);
+      // Update the campaign's collected amount
+      if (campaign?.id) {
+        const campRef = doc(db, 'applications', campaign.id);
+        const campSnap = await getDoc(campRef);
+        if (campSnap.exists()) {
+          const currentCollected = campSnap.data().collectedAmount || 0;
+          await updateDoc(campRef, {
+            collectedAmount: currentCollected + amountNum,
+          });
+        }
       }
 
-      if (data.url) {
-        setLoading(false);
-        const result = await WebBrowser.openBrowserAsync(data.url);
-        if (result.type === 'dismiss') {
-          Alert.alert('Dibatalkan', 'Proses pembayaran ditutup.');
-        } else {
-          Alert.alert('Terima Kasih!', 'Sumbangan anda sangat dihargai.');
-          navigation.navigate('MainPage');
-        }
-      } else {
-        throw new Error(data.error?.message || 'Gagal menjana pautan pembayaran.');
-      }
+      setLoading(false);
+      Alert.alert(
+        '✅ Berjaya! (Demo)',
+        `Sumbangan RM ${amountNum.toFixed(2)} telah direkodkan untuk kempen "${campName}".\n\nNota: Ini adalah mod demo. Tiada pembayaran sebenar dibuat.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
     } catch (error) {
       setLoading(false);
-      Alert.alert('Ralat', error.message);
+      console.error('Demo payment error:', error);
+      Alert.alert('Ralat', 'Gagal merekodkan sumbangan. Sila cuba lagi.');
     }
   };
 
