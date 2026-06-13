@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  ScrollView, TextInput, Alert, ActivityIndicator, Dimensions
+  ScrollView, TextInput, Alert, ActivityIndicator, Dimensions, ImageBackground
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { COLORS } from '../constants';
+import Loading from './Loading';
 
 const { width } = Dimensions.get('window');
 
@@ -221,10 +222,11 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
+  if (loading) return <Loading text="Memuatkan profil..." />;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ImageBackground source={require('../../assets/bg_general.jpg')} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity
@@ -447,36 +449,38 @@ export default function ProfileScreen({ navigation }) {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { alignItems: 'center', paddingVertical: 30, backgroundColor: '#fff' },
+  header: { alignItems: 'center', paddingVertical: 30, backgroundColor: 'rgba(255, 255, 255, 0.6)' },
   avatarWrapper: { width: 100, height: 100, borderRadius: 50, marginBottom: 15, position: 'relative' },
-  avatar: { width: '100%', height: '100%', borderRadius: 50, borderWidth: 3, borderColor: '#3b82f6' },
+  avatar: { width: '100%', height: '100%', borderRadius: 50, borderWidth: 3, borderColor: COLORS.primary },
   editIcon: {
-    position: 'absolute', bottom: 0, right: 0, backgroundColor: '#3b82f6',
+    position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary,
     width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center',
     borderWidth: 2, borderColor: '#fff'
   },
-  userName: { fontSize: 20, fontWeight: '800', color: '#1e293b' },
-  userUsername: { fontSize: 15, fontWeight: '700', color: '#3b82f6', marginTop: 2 },
-  userEmail: { fontSize: 13, color: '#64748b', marginTop: 2 },
-  statsRow: { flexDirection: 'row', backgroundColor: '#fff', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  userName: { fontSize: 20, fontWeight: '800', color: COLORS.text },
+  userUsername: { fontSize: 15, fontWeight: '700', color: COLORS.primary, marginTop: 2 },
+  userEmail: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  statsRow: { flexDirection: 'row', backgroundColor: 'rgba(255, 255, 255, 0.6)', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#f1f5f9' },
   statCard: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 18, fontWeight: '800', color: '#1e3a8a' },
-  statLabel: { fontSize: 12, color: '#64748b', marginTop: 4 },
+  statValue: { fontSize: 18, fontWeight: '800', color: COLORS.primary },
+  statLabel: { fontSize: 12, color: COLORS.textSecondary, marginTop: 4 },
   tabContainer: { flexDirection: 'row', padding: 20, gap: 10 },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0' },
-  tabActive: { backgroundColor: '#3b82f6', borderColor: '#3b82f6' },
-  tabText: { fontSize: 13, fontWeight: '700', color: '#64748b' },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: 'rgba(255, 255, 255, 0.6)', borderWidth: 1, borderColor: '#e2e8f0' },
+  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  tabText: { fontSize: 13, fontWeight: '700', color: COLORS.textSecondary },
   tabTextActive: { color: '#fff' },
   content: { paddingHorizontal: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 5 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1e3a8a' },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, padding: 8, borderRadius: 8, backgroundColor: '#eff6ff' },
   editBtnText: { fontSize: 12, fontWeight: '700', color: '#3b82f6' },
   label: { fontSize: 13, fontWeight: '700', color: '#475569', marginBottom: 8, marginTop: 15 },

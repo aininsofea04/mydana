@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Dimensions,
+  Dimensions, Alert
 } from 'react-native';
+import Loading from './Loading';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { db } from '../firebase';
@@ -12,7 +13,6 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Alert } from 'react-native';
 
 const { width } = Dimensions.get('window');
 const BAR_MAX_W = width - 80;
@@ -185,14 +185,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
     })();
   }, []);
 
-  if (loading) return (
-    <SafeAreaView style={ms.safe}>
-      <View style={ms.center}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ marginTop: 12, color: COLORS.textMuted, fontWeight: '600' }}>Memuatkan analitik...</Text>
-      </View>
-    </SafeAreaView>
-  );
+  if (loading) return <Loading text="Memuatkan analitik..." />;
 
   const now = new Date();
   const M = now.getMonth(), Y = now.getFullYear();
@@ -216,7 +209,11 @@ export default function AdminAnalyticsScreen({ navigation }) {
     color: CAT_CLR[i],
   })).filter(s => s.value > 0);
 
-  const parseAmt = s => { const n = parseFloat((s || '').replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
+  const parseAmt = s => {
+    if (typeof s === 'number') return s;
+    const n = parseFloat((s || '').toString().replace(/[^\d.]/g, ''));
+    return isNaN(n) ? 0 : n;
+  };
   const totalTarget = apps.filter(a => a.status === 'approved').reduce((s, a) => s + parseAmt(a.summary?.dana), 0);
 
   const months6 = Array.from({ length: 6 }, (_, i) => {
@@ -719,14 +716,14 @@ export default function AdminAnalyticsScreen({ navigation }) {
 }
 
 const ms = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f0f4ff' },
+  safe: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   hdr: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    backgroundColor: COLORS.background, borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
   },
-  backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' },
+  backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },
   hdrTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
   hdrSub: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
   printBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eef2ff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e0e7ff' },

@@ -4,6 +4,7 @@ import {
   Modal, TextInput, ActivityIndicator, Alert 
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import Loading from './Loading';
 import { db, auth } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { COLORS } from '../constants';
@@ -122,11 +123,7 @@ export default function InboxScreen({ navigation }) {
   };
 
   if (loading) {
-    return (
-      <SafeAreaView style={[styles.safe, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </SafeAreaView>
-    );
+    return <Loading text="Memuatkan peti masuk..." />;
   }
 
   return (

@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, KeyboardAvoidingView, Platform, Alert,
+  ScrollView, KeyboardAvoidingView, Platform, Alert, Image, ImageBackground
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import * as AuthSession from 'expo-auth-session';
 import { auth } from '../firebase';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { COLORS } from '../constants';
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen({ navigation }) {
   const [emel, setEmel] = useState('');
@@ -19,30 +14,6 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: "449619888673-h2f3nki7u1c33quclhsfm4st5gu4ov3u.apps.googleusercontent.com",
-    iosClientId: "449619888673-m1i1573nd48kuu3e2pcgv0555tpcuqcg.apps.googleusercontent.com",
-    webClientId: "449619888673-h2f3nki7u1c33quclhsfm4st5gu4ov3u.apps.googleusercontent.com",
-  }, {
-    redirectUri: "https://auth.expo.io/@ainin/mydana",
-  });
-
-  React.useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      setLoading(true);
-      signInWithCredential(auth, credential)
-        .then(() => {
-          Alert.alert('Berjaya', 'Log masuk Google berjaya!');
-        })
-        .catch((err) => {
-          setError(`Gagal log masuk Google: ${err.message}`);
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [response]);
 
   const handleLogin = async () => {
     setError('');
@@ -69,17 +40,14 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  const handleGoogleLogin = () => {
-    promptAsync();
-  };
-
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ImageBackground source={require('../../assets/bg_general.jpg')} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Back Button */}
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
@@ -87,10 +55,7 @@ export default function LoginScreen({ navigation }) {
 
           {/* Top Illustration */}
           <View style={styles.illustration}>
-            <View style={styles.illustCircle}>
-              <Ionicons name="heart" size={40} color={COLORS.primary} style={{ opacity: 0.9 }} />
-              <Ionicons name="hand-left-outline" size={24} color={COLORS.secondary} style={{ opacity: 0.8, position: 'absolute', bottom: 12, right: 16 }} />
-            </View>
+            <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
           </View>
 
           {/* Header */}
@@ -149,12 +114,6 @@ export default function LoginScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <View style={styles.dividerLine} />
-          </View>
-
           {/* Register Link */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Belum mempunyai akaun? </Text>
@@ -165,18 +124,17 @@ export default function LoginScreen({ navigation }) {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   scroll: { paddingHorizontal: 24, paddingBottom: 40 },
   backBtn: { marginTop: 12, marginBottom: 10, padding: 4, alignSelf: 'flex-start' },
   illustration: { alignItems: 'center', marginBottom: 24 },
-  illustCircle: {
-    width: 90, height: 90, borderRadius: 45, backgroundColor: '#e0e7ff',
-    justifyContent: 'center', alignItems: 'center',
-  },
+  logoImg: { width: 90, height: 90, borderRadius: 45 },
   title: {
     fontSize: 28, fontWeight: '800', color: COLORS.text, marginBottom: 8, lineHeight: 36,
   },
@@ -201,17 +159,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
   btnPrimaryText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  divider: {
-    flexDirection: 'row', alignItems: 'center', marginVertical: 24, gap: 12,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
-  dividerText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
-  socialBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: COLORS.surface, paddingVertical: 14, borderRadius: 14,
-    borderWidth: 1.5, borderColor: COLORS.border,
-  },
-  socialBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+
   footer: {
     flexDirection: 'row', justifyContent: 'center', marginTop: 28,
   },

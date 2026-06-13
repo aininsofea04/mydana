@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, KeyboardAvoidingView, Platform, Alert,
+  ScrollView, KeyboardAvoidingView, Platform, Alert, Image, ImageBackground
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
@@ -62,9 +62,10 @@ export default function RegisterScreen({ navigation }) {
   ];
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ImageBackground source={require('../../assets/bg_general.jpg')} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Back Button */}
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
@@ -72,7 +73,7 @@ export default function RegisterScreen({ navigation }) {
 
           {/* Header */}
           <View style={styles.headerIcon}>
-            <Ionicons name="heart" size={36} color={COLORS.primary} />
+            <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
           </View>
           <Text style={styles.title}>Daftar Akaun Baru</Text>
           <Text style={styles.subtitle}>Sila isi maklumat anda untuk bermula.</Text>
@@ -149,17 +150,20 @@ export default function RegisterScreen({ navigation }) {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   scroll: { paddingHorizontal: 24, paddingBottom: 40 },
   backBtn: { marginTop: 12, marginBottom: 10, padding: 4, alignSelf: 'flex-start' },
   headerIcon: {
-    width: 70, height: 70, borderRadius: 35, backgroundColor: '#dbeafe',
+    width: 80, height: 80, borderRadius: 40, overflow: 'hidden',
     justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 20,
   },
+  logoImg: { width: 80, height: 80 },
   title: { fontSize: 26, fontWeight: '800', color: COLORS.text, marginBottom: 6 },
   subtitle: { fontSize: 15, color: COLORS.textSecondary, marginBottom: 24 },
   errorBox: {

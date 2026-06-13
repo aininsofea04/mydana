@@ -69,14 +69,14 @@ function AdminTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: { 
-          backgroundColor: '#fff', 
+          backgroundColor: 'rgba(255, 255, 255, 0.9)', 
           height: 65,
           paddingBottom: 10,
           borderTopWidth: 1,
-          borderTopColor: '#e2e8f0'
+          borderTopColor: '#fce7f3'
         },
-        tabBarActiveTintColor: '#004282',
-        tabBarInactiveTintColor: '#94a3b8',
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: '#be185d',
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
           if (route.name === 'Utama') iconName = focused ? 'grid' : 'grid-outline';

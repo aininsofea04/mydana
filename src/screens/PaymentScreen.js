@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Image,
-  ActivityIndicator, ScrollView, Alert, TextInput, KeyboardAvoidingView, Platform
+  ActivityIndicator, ScrollView, Alert, TextInput, KeyboardAvoidingView, Platform, ImageBackground
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -77,7 +77,8 @@ export default function PaymentScreen({ route, navigation }) {
   const currentDisplayAmount = isOtherSelected ? customAmount : amount;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ImageBackground source={require('../../assets/bg_general.jpg')} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="close" size={24} color="#000" />
@@ -204,17 +205,19 @@ export default function PaymentScreen({ route, navigation }) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9',
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#1e293b' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
   backBtn: { padding: 4 },
   scroll: { padding: 20 },
 

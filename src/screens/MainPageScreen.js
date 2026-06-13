@@ -13,6 +13,7 @@ import { COLORS } from '../constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import Loading from './Loading';
 
 const { width, height } = Dimensions.get('window');
 
@@ -966,11 +967,7 @@ export default function MainPageScreen({ navigation }) {
   }, []);
 
   if (loading) {
-    return (
-      <View style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <Loading text="Memuatkan kempen..." />;
   }
 
   return (

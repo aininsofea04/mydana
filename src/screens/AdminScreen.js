@@ -228,16 +228,16 @@ export default function AdminDetailScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+  safe: { flex: 1, backgroundColor: COLORS.background },
   headerBar: { 
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', 
     paddingHorizontal: 16, paddingVertical: 12, 
-    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' 
+    backgroundColor: COLORS.background, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' 
   },
-  headerTitle: { fontSize: 16, fontWeight: '800', color: '#1e293b' },
+  headerTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
   scroll: { padding: 16, paddingBottom: 40 },
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: '#1e293b', marginBottom: 16 },
+  card: { backgroundColor: 'rgba(255, 255, 255, 0.85)', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text, marginBottom: 16 },
   scoreCircle: { alignItems: 'center', marginVertical: 10 },
   scoreNum: { fontSize: 48, fontWeight: '900' },
   scoreLabel: { fontSize: 12, color: '#64748b', marginTop: 4, fontWeight: '600' },

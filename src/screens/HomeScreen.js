@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Image, ImageBackground
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -23,115 +23,76 @@ export default function HomeScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Background Accent */}
-      <View style={styles.backgroundCircle} />
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Top Header - Kept at top for utility */}
-        <View style={styles.header}>
-          <View style={styles.logoRow}>
-            <View style={styles.logoIcon}>
-              <Ionicons name="leaf" size={16} color="#fff" />
+    <ImageBackground source={require('../../assets/bg_home.jpg')} style={styles.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={styles.safe}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Top Header - Kept at top for utility */}
+          <View style={styles.header}>
+            <View style={styles.logoRow}>
+              <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
+              <Text style={styles.logoText}>MyDana</Text>
             </View>
-            <Text style={styles.logoText}>MyDana</Text>
-          </View>
-          {currentUser && (
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutIcon}>
-              <Feather name="log-out" size={18} color={COLORS.error} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Centered Content Wrapper */}
-        <View style={styles.centerContainer}>
-
-          {/* Hero Section */}
-          <View style={styles.heroSection}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>COMMUNITY FIRST</Text>
-            </View>
-            <Text style={styles.heroTitle}>
-              Sumbangan Anda,{"\n"}
-              <Text style={styles.heroHighlight}>Harapan Mereka.</Text>
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              Platform pendanaan telus yang menghubungkan kebaikan hati anda terus kepada mereka yang memerlukan.
-            </Text>
-          </View>
-
-          {/* Featured Card */}
-          <View style={styles.mainCard}>
-            <Ionicons name="heart-circle" size={50} color={COLORS.primary} style={styles.cardIcon} />
-            <Text style={styles.cardText}>
-              "Memberi bukan sekadar menyumbang, tetapi membuat perubahan."
-            </Text>
-
-            {!currentUser && (
-              <TouchableOpacity
-                style={styles.primaryAction}
-                onPress={() => navigation.navigate('Login')}
-              >
-                <Text style={styles.primaryActionText}>Mula Sekarang</Text>
-                <Feather name="arrow-right" size={18} color="#fff" />
+            {currentUser && (
+              <TouchableOpacity onPress={handleLogout} style={styles.logoutIcon}>
+                <Feather name="log-out" size={18} color={COLORS.error} />
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Menu Grid - Centered Below */}
-          {currentUser && (
-            <View style={styles.menuWrapper}>
-              <Text style={styles.menuTitle}>Akses Pantas</Text>
-              <View style={styles.menuGrid}>
-                <MenuCard
-                  icon="chatbubbles-outline"
-                  label="Mohon"
-                  color="#6366f1"
-                  onPress={() => navigation.navigate('Chat')}
-                />
-                <MenuCard
-                  icon="analytics-outline"
-                  label="Status"
-                  color="#10b981"
-                  onPress={() => navigation.navigate('Status')}
-                />
-                <MenuCard
-                  icon="grid-outline"
-                  label="Kempen"
-                  color="#f59e0b"
-                  onPress={() => navigation.navigate('MainPage')}
-                />
+          {/* Centered Content Wrapper */}
+          <View style={styles.centerContainer}>
+
+            {/* Hero Section */}
+            <View style={styles.heroSection}>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>KOMUNITI MALAYSIA</Text>
               </View>
+              <Text style={styles.heroTitle}>Sumbangan Anda,</Text>
+              <View style={styles.highlightBadge}>
+                <Text style={styles.highlightBadgeText}>Harapan Mereka.</Text>
+              </View>
+              <Text style={styles.heroSubtitle}>
+                Platform pendanaan telus yang menghubungkan kebaikan hati anda terus kepada mereka yang memerlukan.
+              </Text>
             </View>
-          )}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+
+            {/* Featured Card */}
+            <View style={styles.mainCard}>
+              <Ionicons name="heart-circle" size={50} color={COLORS.primary} style={styles.cardIcon} />
+              <Text style={styles.cardText}>
+                "Memberi bukan sekadar menyumbang, tetapi membuat perubahan."
+              </Text>
+
+              {!currentUser && (
+                <TouchableOpacity
+                  style={styles.primaryAction}
+                  onPress={() => navigation.navigate('Login')}
+                >
+                  <Text style={styles.primaryActionText}>Mula Sekarang</Text>
+                  <Feather name="arrow-right" size={18} color="#fff" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
-const MenuCard = ({ icon, label, onPress, color }) => (
-  <TouchableOpacity style={styles.menuCard} onPress={onPress} activeOpacity={0.8}>
-    <View style={[styles.menuIconBg, { backgroundColor: color + '10' }]}>
-      <Ionicons name={icon} size={24} color={color} />
-    </View>
-    <Text style={styles.menuLabel}>{label}</Text>
-  </TouchableOpacity>
-);
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   backgroundCircle: {
     position: 'absolute',
-    width: width * 2,
-    height: width * 2,
-    borderRadius: width,
-    backgroundColor: '#F8FAFC',
-    top: -width * 1.2,
-    left: -width / 2,
+    width: 0,
+    height: 0,
   },
   scrollContent: {
     flexGrow: 1, // Important for centering
@@ -145,11 +106,8 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoIcon: {
-    width: 30, height: 30, borderRadius: 8,
-    backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center'
-  },
-  logoText: { fontSize: 18, fontWeight: '800', color: '#1E293B', letterSpacing: -0.5 },
+  logoImg: { width: 32, height: 32, borderRadius: 16 },
+  logoText: { fontSize: 18, fontWeight: '800', color: '#4c0519', letterSpacing: -0.5 },
   logoutIcon: { padding: 8 },
 
   centerContainer: {
@@ -165,24 +123,44 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   badge: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: 'rgba(234, 179, 8, 0.15)',
+    borderWidth: 1,
+    borderColor: '#eab308',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
     marginBottom: 16,
   },
-  badgeText: { fontSize: 10, fontWeight: '800', color: COLORS.primary, letterSpacing: 1 },
+  badgeText: { fontSize: 10, fontWeight: '800', color: '#d97706', letterSpacing: 1 },
   heroTitle: {
     fontSize: 34,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#4c0519',
     textAlign: 'center',
     lineHeight: 42
   },
-  heroHighlight: { color: COLORS.primary },
+  highlightBadge: {
+    backgroundColor: '#eab308',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginTop: 10,
+    alignSelf: 'center',
+    shadowColor: '#eab308',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  highlightBadgeText: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
   heroSubtitle: {
     fontSize: 16,
-    color: '#64748B',
+    color: '#831843',
     textAlign: 'center',
     lineHeight: 24,
     marginTop: 16,
@@ -191,7 +169,7 @@ const styles = StyleSheet.create({
 
   mainCard: {
     width: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderRadius: 32,
     padding: 30,
     alignItems: 'center',
@@ -205,7 +183,7 @@ const styles = StyleSheet.create({
   cardIcon: { marginBottom: 20 },
   cardText: {
     fontSize: 16,
-    color: '#475569',
+    color: COLORS.text,
     textAlign: 'center',
     lineHeight: 24,
     fontStyle: 'italic',
@@ -222,33 +200,4 @@ const styles = StyleSheet.create({
   },
   primaryActionText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
-  menuWrapper: {
-    width: '100%',
-    marginTop: 50,
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    textAlign: 'center',
-    marginBottom: 20
-  },
-  menuGrid: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 15
-  },
-  menuCard: {
-    width: (width - 48 - 40) / 3,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    paddingVertical: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  menuIconBg: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  menuLabel: { fontSize: 12, fontWeight: '700', color: '#334155' }
 });

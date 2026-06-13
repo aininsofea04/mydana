@@ -137,17 +137,17 @@ export default function AdminListScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+  safe: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24, paddingVertical: 14, backgroundColor: '#f8fafc'
+    paddingHorizontal: 24, paddingVertical: 14, backgroundColor: COLORS.background
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: '#1e3a8a' },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.text },
   avatarContainer: { width: 40, height: 40, borderRadius: 20, elevation: 2 },
   avatar: { width: '100%', height: '100%', borderRadius: 20 },
   list: { padding: 24, paddingBottom: 100 },
   listHeader: { marginBottom: 20 },
-  sectionTitle: { fontSize: 28, fontWeight: '900', color: '#1e293b', lineHeight: 34 },
+  sectionTitle: { fontSize: 28, fontWeight: '900', color: COLORS.text, lineHeight: 34 },
   sectionSub: { fontSize: 13, color: '#64748b', marginTop: 10, lineHeight: 20, marginBottom: 20 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#fff',

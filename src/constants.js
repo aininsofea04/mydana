@@ -1,14 +1,14 @@
 export const COLORS = {
-  primary: '#3b82f6',
-  primaryDark: '#2563eb',
-  secondary: '#0ea5e9',
-  background: '#f0f4ff',
-  surface: '#ffffff',
-  text: '#1e293b',
-  textSecondary: '#475569',
-  textMuted: '#94a3b8',
-  border: '#e2e8f0',
-  borderLight: '#f1f5f9',
+  primary: '#eab308',       // Kuning Emas Profesional (Professional Warm Gold)
+  primaryDark: '#d97706',   // Kuning Emas Gelap (Darker Gold)
+  secondary: '#f472b6',     // Pink Lembut Kasih Sayang (Soft Caring Pink)
+  background: 'transparent',
+  surface: 'rgba(255, 255, 255, 0.85)',
+  text: '#4c0519',          // Burgundy Gelap (Professional Mahogany)
+  textSecondary: '#831843', // Burgundy Medium
+  textMuted: '#be185d',     // Pink Sederhana
+  border: '#fde047',        // Kuning sempadan
+  borderLight: '#fef9c3',   // Kuning sempadan cair
   success: '#10b981',
   successBg: '#ecfdf5',
   error: '#ef4444',

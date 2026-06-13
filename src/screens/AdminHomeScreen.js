@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Image, Dimensions, RefreshControl, TextInput
+  Dimensions, RefreshControl, TextInput
 } from 'react-native';
+import Loading from './Loading';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { db, auth } from '../firebase';
@@ -28,7 +29,11 @@ export default function AdminHomeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const parseAmt = s => { const n = parseFloat((s || '').replace(/[^\d.]/g, '')); return isNaN(n) ? 0 : n; };
+  const parseAmt = s => {
+    if (typeof s === 'number') return s;
+    const n = parseFloat((s || '').toString().replace(/[^\d.]/g, ''));
+    return isNaN(n) ? 0 : n;
+  };
 
   const fetchAllData = () => {
     // 1. Fetch Stats from Applications
@@ -116,11 +121,7 @@ export default function AdminHomeScreen({ navigation }) {
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+    return <Loading text="Memuatkan papan pemuka pentadbir..." />;
   }
 
   return (
@@ -284,7 +285,7 @@ export default function AdminHomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+  safe: { flex: 1, backgroundColor: COLORS.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20 },
   header: {
@@ -292,10 +293,9 @@ const styles = StyleSheet.create({
     marginBottom: 24, marginTop: 10
   },
   headerSubtitle: { fontSize: 13, fontWeight: '700', color: '#64748b', textTransform: 'uppercase' },
-  headerTitle: { fontSize: 24, fontWeight: '900', color: '#1e293b' },
+  headerTitle: { fontSize: 24, fontWeight: '900', color: COLORS.text },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fee2e2', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   logoutText: { fontSize: 12, fontWeight: '800', color: '#dc2626' },
-  avatar: { width: '100%', height: '100%', borderRadius: 24 },
 
   statsGrid: { marginBottom: 24 },
   mainStatCard: {

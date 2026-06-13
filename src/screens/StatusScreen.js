@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Linking,
+  Linking,
 } from 'react-native';
+import Loading from './Loading';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { auth, db } from '../firebase';
@@ -67,14 +68,7 @@ export default function StatusScreen({ navigation }) {
   const user = auth.currentUser;
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Memuatkan status...</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <Loading text="Memuatkan status..." />;
   }
 
   if (!user) {
