@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Keyboard,
   FlatList, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
   ScrollView, Modal, Image,
 } from 'react-native';
@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { db, auth } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { COLORS } from '../constants';
-import { callGroqAPI } from '../aiService';
+import { callGroqAPI, getSystemPrompt, analyzeDocument } from '../aiService';
 
 // ─── DATA SENARAI ─────────────────────────────────────────────────────────────
 const NEGERI_LIST = [
@@ -23,22 +23,22 @@ const NEGERI_LIST = [
 ];
 
 const BANDAR_BY_NEGERI = {
-  'Johor': ['Johor Bahru', 'Batu Pahat', 'Kluang', 'Muar', 'Segamat', 'Pontian', 'Kota Tinggi', 'Mersing'],
-  'Kedah': ['Alor Setar', 'Sungai Petani', 'Kulim', 'Langkawi', 'Baling', 'Pendang', 'Yan'],
-  'Kelantan': ['Kota Bharu', 'Tanah Merah', 'Pasir Mas', 'Machang', 'Kuala Krai', 'Gua Musang', 'Tumpat'],
-  'Melaka': ['Melaka Bandaraya', 'Alor Gajah', 'Jasin', 'Masjid Tanah', 'Merlimau'],
-  'Negeri Sembilan': ['Seremban', 'Port Dickson', 'Nilai', 'Rembau', 'Jempol', 'Tampin'],
-  'Pahang': ['Kuantan', 'Temerloh', 'Bentong', 'Raub', 'Jerantut', 'Cameron Highlands', 'Rompin'],
-  'Perak': ['Ipoh', 'Taiping', 'Teluk Intan', 'Manjung', 'Kuala Kangsar', 'Batu Gajah', 'Gerik'],
-  'Perlis': ['Kangar', 'Arau', 'Padang Besar'],
-  'Pulau Pinang': ['George Town', 'Butterworth', 'Bukit Mertajam', 'Bayan Lepas', 'Nibong Tebal'],
-  'Sabah': ['Kota Kinabalu', 'Sandakan', 'Tawau', 'Lahad Datu', 'Keningau', 'Beaufort', 'Kudat'],
-  'Sarawak': ['Kuching', 'Miri', 'Sibu', 'Bintulu', 'Sri Aman', 'Kapit', 'Limbang'],
-  'Selangor': ['Shah Alam', 'Petaling Jaya', 'Subang Jaya', 'Klang', 'Kajang', 'Ampang', 'Rawang', 'Sepang'],
-  'Terengganu': ['Kuala Terengganu', 'Kemaman', 'Dungun', 'Marang', 'Hulu Terengganu'],
-  'W.P. Kuala Lumpur': ['Chow Kit', 'Bangsar', 'Bukit Bintang', 'Wangsa Maju', 'Kepong', 'Segambut', 'Setiawangsa'],
-  'W.P. Labuan': ['Labuan'],
-  'W.P. Putrajaya': ['Putrajaya'],
+  'Johor': ['Johor Bahru', 'Batu Pahat', 'Kluang', 'Muar', 'Segamat', 'Pontian', 'Kota Tinggi', 'Mersing', 'Kulai', 'Tangkak', 'Pasir Gudang', 'Yong Peng', 'Skudai'],
+  'Kedah': ['Alor Setar', 'Sungai Petani', 'Kulim', 'Langkawi', 'Baling', 'Pendang', 'Yan', 'Kubang Pasu', 'Sik', 'Padang Terap', 'Pokok Sena', 'Jitra', 'Kuala Nerang', 'Bandar Baharu'],
+  'Kelantan': ['Kota Bharu', 'Tanah Merah', 'Pasir Mas', 'Machang', 'Kuala Krai', 'Gua Musang', 'Tumpat', 'Pasir Puteh', 'Bachok', 'Jeli'],
+  'Melaka': ['Melaka Bandaraya', 'Alor Gajah', 'Jasin', 'Masjid Tanah', 'Merlimau', 'Ayer Keroh', 'Klebang', 'Sungai Udang'],
+  'Negeri Sembilan': ['Seremban', 'Port Dickson', 'Nilai', 'Rembau', 'Jempol', 'Tampin', 'Kuala Pilah', 'Jelebu', 'Bahau', 'Senawang'],
+  'Pahang': ['Kuantan', 'Temerloh', 'Bentong', 'Raub', 'Jerantut', 'Cameron Highlands', 'Rompin', 'Pekan', 'Maran', 'Lipis', 'Bera', 'Mentakab'],
+  'Perak': ['Ipoh', 'Taiping', 'Teluk Intan', 'Manjung', 'Kuala Kangsar', 'Batu Gajah', 'Gerik', 'Kampar', 'Tapah', 'Parit Buntar', 'Bagan Datuk', 'Tanjung Malim', 'Lumut', 'Seri Iskandar'],
+  'Perlis': ['Kangar', 'Arau', 'Padang Besar', 'Kuala Perlis', 'Simpang Empat'],
+  'Pulau Pinang': ['George Town', 'Butterworth', 'Bukit Mertajam', 'Bayan Lepas', 'Nibong Tebal', 'Perai', 'Kepala Batas', 'Balik Pulau', 'Jelutong', 'Air Itam', 'Tanjung Bungah'],
+  'Sabah': ['Kota Kinabalu', 'Sandakan', 'Tawau', 'Lahad Datu', 'Keningau', 'Beaufort', 'Kudat', 'Penampang', 'Semporna', 'Ranau', 'Papar', 'Tenom', 'Kota Belud', 'Tuaran'],
+  'Sarawak': ['Kuching', 'Miri', 'Sibu', 'Bintulu', 'Sri Aman', 'Kapit', 'Limbang', 'Sarikei', 'Mukah', 'Samarahan', 'Betong', 'Serian', 'Lawas', 'Bau'],
+  'Selangor': ['Shah Alam', 'Petaling Jaya', 'Subang Jaya', 'Klang', 'Kajang', 'Ampang', 'Rawang', 'Sepang', 'Puchong', 'Gombak', 'Selayang', 'Seri Kembangan', 'Banting', 'Kuala Selangor', 'Sabak Bernam', 'Semenyih', 'Cyberjaya'],
+  'Terengganu': ['Kuala Terengganu', 'Kemaman', 'Dungun', 'Besut', 'Marang', 'Hulu Terengganu', 'Setiu', 'Kuala Nerus', 'Kerteh', 'Paka'],
+  'W.P. Kuala Lumpur': ['Kuala Lumpur', 'Cheras', 'Bukit Bintang', 'Bangsar', 'Kepong', 'Setapak', 'Wangsa Maju', 'Segambut', 'Sentul', 'Pantai Dalam', 'Mont Kiara', 'Sri Petaling', 'Bandar Tun Razak'],
+  'W.P. Labuan': ['Labuan', 'Victoria'],
+  'W.P. Putrajaya': ['Putrajaya', 'Presint 1', 'Presint 2', 'Presint 3', 'Presint 4', 'Presint 5', 'Presint 8', 'Presint 9', 'Presint 11', 'Presint 14', 'Presint 15'],
 };
 
 const BANK_LIST = [
@@ -62,7 +62,7 @@ const DropdownSelect = ({ label, value, options, onSelect, placeholder, error })
         <Text style={value ? s.dropdownValue : s.dropdownPlaceholder}>
           {value || placeholder || 'Sila pilih...'}
         </Text>
-        <Ionicons name="chevron-down" size={18} color={COLORS.textMuted} />
+        <Ionicons name="chevron-down" size={18} color="#555" />
       </TouchableOpacity>
       {error ? <Text style={s.errorText}>{error}</Text> : null}
 
@@ -72,7 +72,7 @@ const DropdownSelect = ({ label, value, options, onSelect, placeholder, error })
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{label}</Text>
               <TouchableOpacity onPress={() => setVisible(false)}>
-                <Ionicons name="close" size={22} color={COLORS.text} />
+                <Ionicons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
             <ScrollView>
@@ -104,7 +104,7 @@ const Field = ({ label, fkey, placeholder, multiline, keyboardType, hint, form, 
       <TextInput
         style={[s.input, multiline && s.inputMulti, errors[fkey] && s.inputError]}
         placeholder={placeholder || ''}
-        placeholderTextColor={COLORS.textMuted}
+        placeholderTextColor="#888"
         value={form[fkey]}
         onChangeText={set}
         multiline={!!multiline}
@@ -118,8 +118,8 @@ const Field = ({ label, fkey, placeholder, multiline, keyboardType, hint, form, 
 };
 
 // ─── DATE PICKER CALENDAR MODAL ──────────────────────────────────────────────
-const MONTHS_MY = ['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogs','Sep','Okt','Nov','Dis'];
-const DAYS_MY = ['Ahd','Isn','Sel','Rab','Kam','Jum','Sab'];
+const MONTHS_MY = ['Jan', 'Feb', 'Mac', 'Apr', 'Mei', 'Jun', 'Jul', 'Ogs', 'Sep', 'Okt', 'Nov', 'Dis'];
+const DAYS_MY = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 
 const DatePickerModal = ({ label, value, onSelect, error }) => {
   const [visible, setVisible] = useState(false);
@@ -135,7 +135,7 @@ const DatePickerModal = ({ label, value, onSelect, error }) => {
   // pad to full rows
   while (cells.length % 7 !== 0) cells.push(null);
 
-  const formatDate = (y, m, d) => `${String(d).padStart(2,'0')}/${String(m+1).padStart(2,'0')}/${y}`;
+  const formatDate = (y, m, d) => `${String(d).padStart(2, '0')}/${String(m + 1).padStart(2, '0')}/${y}`;
 
   const prevMonth = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
@@ -168,7 +168,7 @@ const DatePickerModal = ({ label, value, onSelect, error }) => {
             <View style={s.modalHeader}>
               <Text style={s.modalTitle}>{label}</Text>
               <TouchableOpacity onPress={() => setVisible(false)}>
-                <Ionicons name="close" size={22} color={COLORS.text} />
+                <Ionicons name="close" size={22} color="#000" />
               </TouchableOpacity>
             </View>
             {/* Month Nav */}
@@ -263,7 +263,7 @@ const DocUploadSection = ({ docs, setDocs }) => {
 
       {docs.length === 0 ? (
         <View style={s.emptyDoc}>
-          <Ionicons name="cloud-upload-outline" size={32} color={COLORS.textMuted} />
+          <Ionicons name="cloud-upload-outline" size={32} color="#555" />
           <Text style={s.emptyDocText}>Belum ada dokumen dimuat naik</Text>
         </View>
       ) : (
@@ -353,6 +353,10 @@ function ApplicationForm({ onSubmit }) {
         <View style={s.section}>
           <Text style={s.sectionTitle}>① Maklumat Peribadi</Text>
           <Field label="Nama Penuh" fkey="namapenuh" placeholder="Contoh: Ahmad bin Ali" form={form} setForm={setForm} errors={errors} />
+          <Field label="No. Telefon" fkey="telefon" placeholder="0123456789" keyboardType="phone-pad" form={form} setForm={setForm} errors={errors} />
+          <Field label="Email" fkey="email" placeholder="email@contoh.com" keyboardType="email-address" form={form} setForm={setForm} errors={errors} />
+          <Field label="Alamat Rumah Lengkap" fkey="alamat" placeholder="No, Jalan, Taman, Poskod, Negeri" multiline={4}
+            hint="Sila nyatakan alamat penuh termasuk poskod." form={form} setForm={setForm} errors={errors} />
           <DropdownSelect
             label="Negeri"
             value={form.negeri}
@@ -369,10 +373,6 @@ function ApplicationForm({ onSubmit }) {
             error={errors.bandar}
             onSelect={(val) => setForm(f => ({ ...f, bandar: val }))}
           />
-          <Field label="No. Telefon" fkey="telefon" placeholder="0123456789" keyboardType="phone-pad" form={form} setForm={setForm} errors={errors} />
-          <Field label="Email" fkey="email" placeholder="email@contoh.com" keyboardType="email-address" form={form} setForm={setForm} errors={errors} />
-          <Field label="Alamat Rumah Lengkap" fkey="alamat" placeholder="No, Jalan, Taman, Poskod, Negeri" multiline={4}
-            hint="Sila nyatakan alamat penuh termasuk poskod." form={form} setForm={setForm} errors={errors} />
         </View>
 
         {/* SEKSYEN 2 */}
@@ -463,13 +463,7 @@ function ChatVerification({ formData, navigation, onBack }) {
     `- Tempoh: ${f.tarikmula} hingga ${f.tarihtamat}\n` +
     `- Bank: ${f.namabank} | No. Akaun: ${f.noakaun}`;
 
-  const SYSTEM_PROMPT = `Anda adalah Pegawai Verifikasi AI MyDana. Pemohon telah mengisi borang permohonan dana. Tugas anda adalah:
-1. Semak kesahihan maklumat yang diberikan secara kritikal.
-2. Tanya soalan susulan jika ada maklumat yang meragukan atau tidak lengkap.
-3. Pastikan sebab permohonan adalah logik dan terperinci.
-4. Jika semua maklumat SAH dan MEMUASKAN, beritahu pemohon untuk tekan butang "Hantar Permohonan".
-5. Jika ada isu, minta pemohon jelaskan dalam chat ini.
-Bersikap profesional, empati tetapi tegas.`;
+  const SYSTEM_PROMPT = getSystemPrompt(formData);
 
   const INIT_MSG = {
     id: '0', sender: 'bot', role: 'assistant',
@@ -481,18 +475,114 @@ Bersikap profesional, empati tetapi tegas.`;
   const [isTyping, setIsTyping] = useState(false);
   const [isValidated, setIsValidated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isKeyboardActive, setIsKeyboardActive] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const ocrTextRef = useRef('Tiada imbasan dokumen sokongan.');
   const flatListRef = useRef(null);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardActive(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardActive(false);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Auto-start: AI reviews the form on mount
   useEffect(() => {
     const runInitialReview = async () => {
       setIsTyping(true);
+      
+      let ocrText = "TIADA imbasan dokumen (pengguna tidak memuat naik gambar bil/invois).";
+      try {
+        const images = formData?.uploadedDocs?.filter(doc => 
+          doc.type === 'image' || 
+          doc.name?.toLowerCase().endsWith('.jpg') || 
+          doc.name?.toLowerCase().endsWith('.jpeg') || 
+          doc.name?.toLowerCase().endsWith('.png')
+        ) || [];
+
+        if (images.length > 0) {
+          const ocrResults = [];
+          for (const img of images) {
+            let ocrData = null;
+            const cacheKey = `ocr_cache_${img.uri}`;
+            
+            // Check cache first to save quota
+            try {
+              const cachedVal = await AsyncStorage.getItem(cacheKey);
+              if (cachedVal) {
+                ocrData = JSON.parse(cachedVal);
+              }
+            } catch (cacheErr) {
+              console.warn("Gagal membaca cache OCR:", cacheErr);
+            }
+
+            if (!ocrData) {
+              try {
+                ocrData = await analyzeDocument(img.uri);
+                // Save to cache
+                try {
+                  await AsyncStorage.setItem(cacheKey, JSON.stringify(ocrData));
+                } catch (cacheErr) {
+                  console.warn("Gagal menyimpan cache OCR:", cacheErr);
+                }
+              } catch (apiErr) {
+                console.error("Gagal imbasan OCR:", img.name, apiErr);
+                const errMsg = apiErr.message || String(apiErr);
+                const isRateLimit = errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('limit');
+                
+                // Graceful fallback for quota/rate limit error
+                ocrData = {
+                  jenis_dokumen: "Bil/Dokumen rawatan (Imbasan Gagal)",
+                  institusi: "Tidak dapat dikesan",
+                  tarikh: "Tidak dapat dikesan",
+                  jumlah_rm: formData.jumlah || "0",
+                  ringkasan: isRateLimit 
+                    ? "Gagal mengimbas kerana had kuota Gemini API percuma (Error 429) telah dicapai."
+                    : `Gagal mengimbas dokumen: ${errMsg}`,
+                  status_verifikasi: "Perlu Semakan Manual",
+                  sebab_status: isRateLimit 
+                    ? "Had kuota Gemini API (Error 429) terlampaui. Sila tanya pengguna untuk mengesahkan bil secara manual." 
+                    : "Ralat imbasan teknikal."
+                };
+              }
+            }
+
+            ocrResults.push({ name: img.name, ...ocrData });
+          }
+
+          if (ocrResults.length > 0) {
+            ocrText = ocrResults.map((res, idx) => 
+              `Dokumen #${idx + 1} (${res.name}):\n` +
+              `- Jenis: ${res.jenis_dokumen || 'Lain-lain'}\n` +
+              `- Institusi: ${res.institusi || 'Tidak diketahui'}\n` +
+              `- Tarikh: ${res.tarikh || 'Tidak dikesan'}\n` +
+              `- Jumlah Dikesan: RM${res.jumlah_rm || '0'}\n` +
+              `- Ringkasan: ${res.ringkasan || 'Tiada'}\n` +
+              `- Status Verifikasi: ${res.status_verifikasi} (${res.sebab_status || ''})`
+            ).join('\n\n');
+          }
+        }
+      } catch (err) {
+        console.error("Ralat memproses dokumen sokongan:", err);
+      }
+
+      ocrTextRef.current = ocrText;
       const summary = buildSummary(formData);
       const history = [
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `Berikut adalah maklumat yang telah saya isi dalam borang:\n\n${summary}\n\nSila semak dan beritahu saya jika ada isu atau maklumat yang perlu saya jelaskan.`,
+          content: `Berikut adalah maklumat yang telah saya isi dalam borang:\n\n${summary}\n\nHASIL IMBASAN OCR DOKUMEN:\n${ocrText}\n\nSila semak dan beritahu saya jika ada isu atau maklumat yang perlu saya jelaskan.`,
         },
       ];
       try {
@@ -523,7 +613,10 @@ Bersikap profesional, empati tetapi tegas.`;
       const summary = buildSummary(formData);
       const history = [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Maklumat borang saya:\n\n${summary}` },
+        { 
+          role: 'user', 
+          content: `Berikut adalah maklumat yang telah saya isi dalam borang:\n\n${summary}\n\nHASIL IMBASAN OCR DOKUMEN:\n${ocrTextRef.current}` 
+        },
         ...newMsgs.map(m => ({ role: m.role, content: m.text })),
       ];
       const reply = await callGroqAPI(history);
@@ -611,7 +704,7 @@ Bersikap profesional, empati tetapi tegas.`;
     <SafeAreaView style={c.safe}>
       <View style={c.header}>
         <TouchableOpacity onPress={onBack} style={c.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.text} />
+          <Ionicons name="arrow-back" size={22} color="#000" />
         </TouchableOpacity>
         <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
         <View style={{ flex: 1, marginLeft: 10 }}>
@@ -623,11 +716,29 @@ Bersikap profesional, empati tetapi tegas.`;
         </View>
       </View>
 
-      {/* Summary Card */}
-      <View style={c.summaryCard}>
-        <Text style={c.summaryTitle}>📋 Ringkasan Maklumat Anda</Text>
-        <Text style={c.summaryText}>{buildSummary(formData)}</Text>
-      </View>
+      {/* Collapsible Summary Card */}
+      {!isKeyboardActive && (
+        <View style={c.summaryContainer}>
+          <TouchableOpacity 
+            style={c.summaryHeader} 
+            onPress={() => setShowSummary(!showSummary)}
+            activeOpacity={0.7}
+          >
+            <Text style={c.summaryTitle}>
+              📋 Ringkasan Maklumat Anda {showSummary ? '▲' : '▼'}
+            </Text>
+            <Text style={c.summaryToggleText}>
+              {showSummary ? 'Sembunyikan' : 'Lihat Detail'}
+            </Text>
+          </TouchableOpacity>
+          
+          {showSummary && (
+            <View style={c.summaryBody}>
+              <Text style={c.summaryText}>{buildSummary(formData)}</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={10}>
         <FlatList
@@ -654,22 +765,24 @@ Bersikap profesional, empati tetapi tegas.`;
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={[c.submitBtn, (!isValidated || isSubmitting) && { opacity: 0.45 }]}
-          onPress={handleSubmit}
-          disabled={!isValidated || isSubmitting}
-          activeOpacity={0.85}
-        >
-          {isSubmitting
-            ? <ActivityIndicator color="#fff" />
-            : <>
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
-              <Text style={c.submitBtnText}>
-                {isValidated ? 'Hantar Permohonan' : 'Menunggu Pengesahan AI...'}
-              </Text>
-            </>
-          }
-        </TouchableOpacity>
+        {!isKeyboardActive && (
+          <TouchableOpacity
+            style={[c.submitBtn, (!isValidated || isSubmitting) && { opacity: 0.45 }]}
+            onPress={handleSubmit}
+            disabled={!isValidated || isSubmitting}
+            activeOpacity={0.85}
+          >
+            {isSubmitting
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={c.submitBtnText}>
+                  {isValidated ? 'Hantar Permohonan' : 'Menunggu Pengesahan AI...'}
+                </Text>
+              </>
+            }
+          </TouchableOpacity>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -685,7 +798,7 @@ export default function ChatScreen({ navigation }) {
       <SafeAreaView style={s.safe}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Ionicons name="lock-closed" size={32} color={COLORS.secondary} />
-          <Text style={{ color: COLORS.text, marginTop: 12, fontSize: 16 }}>Log Masuk Diperlukan</Text>
+          <Text style={{ color: '#000', marginTop: 12, fontSize: 16 }}>Log Masuk Diperlukan</Text>
         </View>
       </SafeAreaView>
     );
@@ -713,7 +826,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 16,
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#000' },
   formScroll: { padding: 20, gap: 16 },
   section: {
     backgroundColor: '#fff', borderRadius: 18, padding: 18,
@@ -722,11 +835,11 @@ const s = StyleSheet.create({
   },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: COLORS.primary, marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
   fieldWrap: { marginBottom: 14 },
-  label: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6 },
-  hint: { fontSize: 11, color: COLORS.textMuted, marginBottom: 6, fontStyle: 'italic' },
+  label: { fontSize: 13, fontWeight: '600', color: '#000', marginBottom: 6 },
+  hint: { fontSize: 11, color: '#555', marginBottom: 6, fontStyle: 'italic' },
   input: {
     backgroundColor: COLORS.borderLight, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border,
+    fontSize: 14, color: '#000', borderWidth: 1, borderColor: COLORS.border,
   },
   inputMulti: { minHeight: 100, textAlignVertical: 'top' },
   inputError: { borderColor: COLORS.error, backgroundColor: '#fff5f5' },
@@ -738,18 +851,18 @@ const s = StyleSheet.create({
     backgroundColor: COLORS.borderLight, borderWidth: 1, borderColor: COLORS.border,
   },
   catChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  catChipText: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
+  catChipText: { fontSize: 13, color: '#000', fontWeight: '500' },
   catChipTextActive: { color: '#fff', fontWeight: '700' },
   // Calendar styles
   calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 12 },
   calNavBtn: { padding: 6 },
-  calMonthLabel: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  calMonthLabel: { fontSize: 16, fontWeight: '700', color: '#000' },
   calDayRow: { flexDirection: 'row', paddingHorizontal: 10, marginBottom: 4 },
-  calDayHeader: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: COLORS.textMuted, paddingVertical: 4 },
+  calDayHeader: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#555', paddingVertical: 4 },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, paddingBottom: 8 },
   calCell: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 100 },
   calCellSelected: { backgroundColor: COLORS.primary },
-  calCellText: { fontSize: 14, color: COLORS.text },
+  calCellText: { fontSize: 14, color: '#000' },
   calCellTextSelected: { color: '#fff', fontWeight: '700' },
   // Upload styles
   uploadBtnRow: { flexDirection: 'row', gap: 10, marginTop: 10, marginBottom: 14 },
@@ -760,7 +873,7 @@ const s = StyleSheet.create({
   },
   uploadBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
   emptyDoc: { alignItems: 'center', paddingVertical: 20, gap: 8 },
-  emptyDocText: { fontSize: 13, color: COLORS.textMuted },
+  emptyDocText: { fontSize: 13, color: '#555' },
   docList: { gap: 10 },
   docItem: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -768,12 +881,12 @@ const s = StyleSheet.create({
   },
   docThumb: { width: 44, height: 44, borderRadius: 8 },
   docIcon: { width: 44, height: 44, borderRadius: 8, backgroundColor: '#dbeafe', justifyContent: 'center', alignItems: 'center' },
-  docName: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: '500' },
+  docName: { flex: 1, fontSize: 13, color: '#000', fontWeight: '500' },
   docRemoveBtn: { padding: 2 },
   // Dropdown styles
   dropdownTrigger: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownValue: { fontSize: 14, color: COLORS.text, flex: 1 },
-  dropdownPlaceholder: { fontSize: 14, color: COLORS.textMuted, flex: 1 },
+  dropdownValue: { fontSize: 14, color: '#000', flex: 1 },
+  dropdownPlaceholder: { fontSize: 14, color: '#555', flex: 1 },
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
   },
@@ -786,14 +899,14 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 16,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  modalTitle: { fontSize: 16, fontWeight: '800', color: COLORS.text },
+  modalTitle: { fontSize: 16, fontWeight: '800', color: '#000' },
   modalItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
   },
   modalItemActive: { backgroundColor: '#eff6ff' },
-  modalItemText: { fontSize: 15, color: COLORS.text },
+  modalItemText: { fontSize: 15, color: '#000' },
   modalItemTextActive: { color: COLORS.primary, fontWeight: '700' },
   nextBtn: {
     backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
@@ -811,18 +924,35 @@ const c = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  headerSub: { fontSize: 11, color: COLORS.textMuted },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: '#000' },
+  headerSub: { fontSize: 11, color: '#555' },
   backBtn: { padding: 4, marginRight: 8 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: '#fef9c3' },
   badgeOk: { backgroundColor: '#dcfce7' },
-  badgeText: { fontSize: 11, fontWeight: '700', color: COLORS.text },
-  summaryCard: {
-    margin: 12, padding: 14, backgroundColor: '#eff6ff',
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#000' },
+  summaryContainer: {
+    margin: 12, backgroundColor: '#eff6ff',
     borderRadius: 14, borderLeftWidth: 4, borderLeftColor: COLORS.primary,
+    overflow: 'hidden',
   },
-  summaryTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginBottom: 6 },
-  summaryText: { fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  summaryToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  summaryBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  },
+  summaryTitle: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  summaryText: { fontSize: 12, color: '#000', lineHeight: 18 },
   msgList: { paddingHorizontal: 14, paddingVertical: 10 },
   msgRow: { flexDirection: 'row', marginBottom: 12, alignItems: 'flex-end', gap: 8 },
   msgRowUser: { flexDirection: 'row-reverse' },
@@ -833,8 +963,8 @@ const c = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
   bubbleUser: { backgroundColor: COLORS.primary, borderBottomLeftRadius: 16, borderBottomRightRadius: 4 },
-  msgText: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
-  typingText: { fontSize: 13, fontStyle: 'italic', color: COLORS.textMuted, paddingHorizontal: 14, paddingBottom: 8 },
+  msgText: { fontSize: 14, color: '#000', lineHeight: 20 },
+  typingText: { fontSize: 13, fontStyle: 'italic', color: '#555', paddingHorizontal: 14, paddingBottom: 8 },
   inputBar: {
     flexDirection: 'row', alignItems: 'flex-end', gap: 8,
     paddingHorizontal: 12, paddingVertical: 10,
@@ -842,7 +972,7 @@ const c = StyleSheet.create({
   },
   chatInput: {
     flex: 1, backgroundColor: COLORS.borderLight, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, maxHeight: 100, color: COLORS.text,
+    paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, maxHeight: 100, color: '#000',
   },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
   submitBtn: {

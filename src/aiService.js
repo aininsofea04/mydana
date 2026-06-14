@@ -2,44 +2,44 @@ import { GROQ_API_KEY as ENV_KEY } from './constants'; // We can move the key de
 
 export const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || ENV_KEY || '';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 
-export const getSystemPrompt = (existingApp) => {
-  let prompt = `Anda adalah Pakar Verifikasi AI MyDana. Tugas anda adalah mengumpul maklumat permohonan kempen secara sangat ketat untuk mengelakkan penipuan.
+export const getSystemPrompt = (formData) => {
+  const kategori = formData?.kategori || '[Kategori]';
+  const jumlah = formData?.jumlah || '0';
 
-ANDA WAJIB MENANYA SOALAN BERIKUT SATU PER SATU:
-1. Nama Penuh.
-2. Lokasi Pemohon (Bandar & Negeri).
-3. No Telefon & Email.
-4. Alamat Rumah Lengkap.
-5. Kategori Permohonan (cth: Rawatan Perubatan, Pendidikan, Bantuan Sara Hidup, Haiwan, Bencana Alam, etc).
-6. Sebab permohonan dana secara TERPERINCI (Contoh: Jika yuran tertunggak, jelaskan KENAPA ia tertunggak).
-7. Jumlah dana yang diperlukan (RM).
-8. Tempoh kutipan (Tarikh mula & Tarikh tamat yang disasarkan).
-9. Maklumat Akaun Bank (Nama Bank & No Akaun).
+  let prompt = `Anda adalah Pakar Verifikasi & Penasihat AI MyDana. 
 
-DOKUMEN WAJIB (Minta pengguna muat naik):
-- Penyata Bank (Bank Statement).
-- Bil/Invois rasmi daripada pihak berkaitan.
-- Sebut harga (Quotation) bagi dana yang dipohon.
+PANDUAN BAHASA & INTERAKSI (SANGAT PENTING):
+- Gunakan bahasa yang SANGAT RINGKAS, MUDAH, dan AYAT YANG PENDEK.
+- Pemohon mungkin warga emas, jadi jangan tulis teks panjang-panjang atau berbelit-belit.
+- Hadkan jawapan anda kepada 1 atau 2 perenggan pendek sahaja. Terus kepada poin utama.
+- Jangan rumitkan proses. Jika sebab munasabah dan dokumen sepadan, segera selesai dan luluskan semakan AI.
 
-ARAHAN KHAS:
-- Jangan benarkan pengguna melangkau maklumat di atas.
-- Bersikap profesional, empati namun tegas dalam verifikasi.
-- Setelah SEMUA maklumat dan dokumen diterima, anda WAJIB menyuruh pengguna menekan butang "Selesai & Hantar Permohonan" di bahagian bawah skrin untuk menghantar permohonan kepada Admin.`;
+TUGAS ANDA:
+Bukan lagi untuk meminta maklumat asas, tetapi untuk MENYEMAK, MENGESAHKAN, dan MEMURNIKAN permohonan yang telah diisi oleh pemohon dalam borang bagi memastikan ia telus, berkualiti tinggi, dan bebas daripada unsur penipuan sebelum dihantar kepada Admin.
 
-  if (existingApp && existingApp.summary) {
-    prompt += `\n\nMAKLUMAT PEMOHON SEDIA ADA (Dari permohonan lepas):
-Lokasi: ${existingApp.summary.lokasi || 'Tidak direkod'}
-Bank: ${existingApp.summary.bank || 'Tidak direkod'}
+ARAHAN KERJA CHATBOT (LAKUKAN SECARA BERPERINGKAT):
 
-ARAHAN TAMBAHAN UNTUK PEMOHON BERULANG:
-- Pengguna ini telah membuat permohonan sebelum ini.
-- Jangan tanya semula Nama, Lokasi, Telefon, Alamat, dan Maklumat Bank.
-- Sebaliknya, nyatakan maklumat mereka yang sedia ada, dan minta mereka SAHKAN jika maklumat peribadi dan bank masih sama.
-- Jika pengguna mengesahkan masih sama, TERUSKAN dengan bertanya maklumat KHUSUS untuk kempen baru: Kategori, Sebab Terperinci, Jumlah Dana, Tempoh Kutipan, dan Dokumen Wajib yang baru.`;
-  }
+1. SALUTASI & PENGESAHAN:
+   Sapa pemohon dengan mesra dan ringkas. Nyatakan anda sedang menyemak permohonan mereka untuk kategori ${kategori}. 
+
+2. VERIFIKASI DOKUMEN & JUMLAH (Kritikal):
+   - Jika ada hasil imbasan Gemini (OCR) pada bil/invois, sahkan sama ada jumlah RM${jumlah} yang dipohon sepadan dengan dokumen. 
+   - Jika ada isu dokumen, minta penjelasan dengan ayat yang mudah.
+
+3. PEMURNIAN "SEBAB PERMOHONAN":
+   - Baca "Sebab Permohonan" yang diisi. Jika terlalu ringkas (kurang daripada 30 patah perkataan), minta mereka tambah sedikit huraian ringkas (contoh: Kenapa tunggakan berlaku?) secara empati. Jangan paksa cerita yang terlalu panjang.
+   - Bantu mereka strukturkan ayat pendek agar rayuan jelas untuk penderma.
+
+4. NADA & SIKAP:
+   - Sentiasa sopan, penuh empati, dan ringkas.
+   - Jangan tanya semula data peribadi (No Tel, Emel, Alamat, Bank) kerana sudah ada dalam borang.
+
+5. KELULUSAN AKHIR:
+   Apabila sebab munasabah dan dokumen sepadan, beritahu pemohon semakan awal selesai.
+   ARAHKAN mereka dengan jelas untuk menekan butang "Hantar Permohonan" di bawah skrin.`;
 
   return prompt;
 };
@@ -58,8 +58,8 @@ export const callGroqAPI = async (messages) => {
         messages,
         temperature: 0.6,
         max_tokens: 2048,
-        ...(messages.some(m => m.content && m.content.includes('Format jawapan MESTI dalam JSON')) 
-            ? { response_format: { type: "json_object" } } : {})
+        ...(messages.some(m => m.content && m.content.includes('Format jawapan MESTI dalam JSON'))
+          ? { response_format: { type: "json_object" } } : {})
       }),
     });
 
@@ -124,18 +124,21 @@ export const analyzeApplication = async (transcript) => {
 };
 
 
-// Inisialisasi dengan API Key anda
-const genAI = new GoogleGenerativeAI("AIzaSyCtjsDBR22Ed-YUmFwidbrjw__FP9C9vfU");
+export const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export const analyzeDocument = async (imageUri, mimeType = "image/jpeg") => {
   try {
+    if (!GEMINI_API_KEY || GEMINI_API_KEY.includes('SILA_MASUKKAN')) {
+      throw new Error("Sila masukkan API Key Gemini yang sah dalam fail .env.local (EXPO_PUBLIC_GEMINI_API_KEY).");
+    }
     // 1. Tukar fail ke format Base64
     const base64Data = await FileSystem.readAsStringAsync(imageUri, {
       encoding: 'base64',
     });
 
     // 2. Inisialisasi Model (Flash adalah yang terpantas & percuma)
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash",
       generationConfig: { responseMimeType: "application/json" }
     });
@@ -167,12 +170,10 @@ export const analyzeDocument = async (imageUri, mimeType = "image/jpeg") => {
       },
     ];
 
-    // 4. Hantar ke Gemini
     const result = await model.generateContent([prompt, ...imageParts]);
     const response = await result.response;
     const text = response.text();
 
-    // 5. Parse hasil ke JSON dengan selamat (buang markdown)
     let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
     const jsonStart = cleanText.indexOf('{');
     const jsonEnd = cleanText.lastIndexOf('}') + 1;
