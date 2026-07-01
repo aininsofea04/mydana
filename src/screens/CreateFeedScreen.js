@@ -5,7 +5,21 @@ import {
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Video } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
+
+function VideoPreviewComponent({ uri }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = true;
+  });
+  return (
+    <VideoView
+      player={player}
+      style={styles.videoPreview}
+      contentFit="cover"
+      nativeControls
+    />
+  );
+}
 import { auth, db, storage } from '../firebase';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -162,13 +176,7 @@ export default function CreateFeedScreen({ navigation }) {
         <View style={styles.mediaContainer}>
           {videoUri ? (
             <View style={styles.videoWrapper}>
-              <Video
-                source={{ uri: videoUri }}
-                style={styles.videoPreview}
-                resizeMode="cover"
-                useNativeControls
-                isLooping
-              />
+              <VideoPreviewComponent uri={videoUri} />
               <TouchableOpacity style={styles.removeBtn} onPress={() => setVideoUri(null)}>
                 <Ionicons name="close-circle" size={24} color={COLORS.error} />
               </TouchableOpacity>

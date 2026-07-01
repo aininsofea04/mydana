@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Dimensions, Alert
+  Dimensions, Alert, ImageBackground
 } from 'react-native';
 import Loading from './Loading';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,9 +66,9 @@ function DonutChart({ slices, label, total }) {
 }
 
 const dc = StyleSheet.create({
-  ring: { width: 130, height: 130, borderRadius: 65, backgroundColor: '#f0f4ff', overflow: 'hidden', position: 'relative' },
+  ring: { width: 130, height: 130, borderRadius: 65, backgroundColor: COLORS.borderLight, overflow: 'hidden', position: 'relative' },
   slice: { position: 'absolute', width: 130, height: 130, borderRadius: 65, borderWidth: 30, borderTopColor: COLORS.primary, borderRightColor: 'transparent', borderBottomColor: 'transparent', borderLeftColor: 'transparent' },
-  hole: { position: 'absolute', top: 25, left: 25, width: 80, height: 80, borderRadius: 40, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
+  hole: { position: 'absolute', top: 25, left: 25, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255, 255, 255, 0.9)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 },
   holeNum: { fontSize: 22, fontWeight: '900', color: COLORS.text },
   holeLbl: { fontSize: 9, color: COLORS.textMuted, fontWeight: '600' },
 });
@@ -152,7 +152,7 @@ function Section({ title, icon, color, children }) {
   );
 }
 const sc = StyleSheet.create({
-  wrap: { backgroundColor: '#fff', borderRadius: 18, marginBottom: 14, overflow: 'hidden', borderTopWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4 },
+  wrap: { backgroundColor: 'rgba(255, 255, 255, 0.85)', borderRadius: 18, marginBottom: 14, overflow: 'hidden', borderTopWidth: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 4 },
   hdr: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingBottom: 12 },
   badge: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   title: { flex: 1, fontSize: 15, fontWeight: '800', color: COLORS.text },
@@ -202,7 +202,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
   const activeMonthly = users.filter(u => u._dt.getMonth() === M && u._dt.getFullYear() === Y).length;
 
   const CATS = ['Perubatan', 'Haiwan', 'Pendidikan', 'Bencana Alam', 'Umum', 'Permohonan Bantuan'];
-  const CAT_CLR = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+  const CAT_CLR = [COLORS.textSecondary, '#059669', COLORS.primary, COLORS.error, COLORS.secondary, COLORS.textMuted];
   const catSlices = CATS.map((c, i) => ({
     label: c,
     value: apps.filter(a => (a.category || '').toLowerCase().includes(c.toLowerCase())).length,
@@ -312,7 +312,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: -apple-system, Arial, sans-serif; padding: 28px; color: #1e293b; background: #f8fafc; }
-      .cover { background: linear-gradient(135deg,#4f46e5,#7c3aed); border-radius: 16px; padding: 28px 32px; margin-bottom: 28px; color: white; }
+      .cover { background: linear-gradient(135deg, ${COLORS.textMuted}, ${COLORS.primary}); border-radius: 16px; padding: 28px 32px; margin-bottom: 28px; color: white; }
       .cover h1 { font-size: 26px; font-weight: 900; margin-bottom: 6px; }
       .cover .meta { font-size: 13px; opacity: 0.85; }
       .badges { display: flex; gap: 16px; margin-top: 18px; }
@@ -329,7 +329,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
       .table-col { flex: 1; }
       .table-col .col-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
       table { width: 100%; border-collapse: collapse; }
-      th { background: #4f46e5; color: #fff; padding: 9px 12px; text-align: left; font-size: 12px; font-weight: 700; }
+      th { background: ${COLORS.textMuted}; color: #fff; padding: 9px 12px; text-align: left; font-size: 12px; font-weight: 700; }
       td { padding: 7px 12px; border-bottom: 1px solid #f1f5f9; font-size: 12px; }
       tr:last-child td { border-bottom: none; }
       tr:nth-child(even) td { background: #f8fafc; }
@@ -348,22 +348,22 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </div>
       </div>
 
-      ${secRow('Pengurusan Pengguna', '#6366f1', '&#128100;',
+      ${secRow('Pengurusan Pengguna', '${COLORS.textSecondary}', '&#128100;',
         `<div class="chart-col">
           <div class="lbl">Trend Pendaftaran</div>
-          ${svgHBar(monthRows.map(m => ({ ...m, color: '#6366f1' })), 200)}
+          ${svgHBar(monthRows.map(m => ({ ...m, color: '${COLORS.textMuted}' })), 200)}
         </div>`,
         `<div class="table-col">
           <div class="col-lbl">Ringkasan Pengguna</div>
           ${tbl([
-            { label: 'Jumlah Berdaftar', value: totalUsers, color: '#6366f1' },
+            { label: 'Jumlah Berdaftar', value: totalUsers, color: '${COLORS.textSecondary}' },
             { label: 'Aktif Bulan Ini', value: activeMonthly, color: '#10b981' },
-            { label: 'Pernah Memohon', value: apps.filter(a => a.userId || a.email).length, color: '#f59e0b' },
+            { label: 'Pernah Memohon', value: apps.filter(a => a.userId || a.email).length, color: '${COLORS.primary}' },
           ])}
         </div>`
       )}
 
-      ${secRow('Analitik Kempen', '#3b82f6', '&#128202;',
+      ${secRow('Analitik Kempen', '${COLORS.textMuted}', '&#128202;',
         `<div class="chart-col">
           <div class="lbl">Pecahan Kategori</div>
           ${svgDonut(catRows.filter(c => c.value > 0).length ? catRows.filter(c => c.value > 0) : [{ label: 'Tiada', value: 1, color: '#e2e8f0' }], total, 'Kempen')}
@@ -375,7 +375,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </div>`
       )}
 
-      ${secRow('Analitik Kewangan', '#10b981', '&#128176;',
+      ${secRow('Analitik Kewangan', '${COLORS.primaryDark}', '&#128176;',
         `<div class="chart-col">
           <div class="lbl">Status Dana</div>
           ${svgDonut([
@@ -390,15 +390,15 @@ export default function AdminAnalyticsScreen({ navigation }) {
         `<div class="table-col">
           <div class="col-lbl">Maklumat Kewangan</div>
           ${tbl([
-            { label: 'Jumlah Sasaran Dana', value: `RM ${Math.round(totalTarget).toLocaleString('ms-MY')}`, color: '#3b82f6' },
+            { label: 'Jumlah Sasaran Dana', value: `RM ${Math.round(totalTarget).toLocaleString('ms-MY')}`, color: '${COLORS.textSecondary}' },
             { label: 'Anggaran Terkumpul', value: `RM ${Math.round(totalTarget * 0.45).toLocaleString('ms-MY')}`, color: '#10b981' },
-            { label: 'Baki Sasaran', value: `RM ${Math.round(totalTarget * 0.55).toLocaleString('ms-MY')}`, color: '#ef4444' },
+            { label: 'Baki Sasaran', value: `RM ${Math.round(totalTarget * 0.55).toLocaleString('ms-MY')}`, color: '${COLORS.error}' },
             { label: 'Kempen Diluluskan', value: approved, color: '#10b981' },
           ])}
         </div>`
       )}
 
-      ${secRow('Kelulusan Permohonan', '#f59e0b', '&#9989;',
+      ${secRow('Kelulusan Permohonan', '${COLORS.primary}', '&#9989;',
         `<div class="chart-col">
           <div class="lbl">Nisbah Keputusan</div>
           ${svgDonut([
@@ -415,7 +415,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
         `<div class="table-col">
           <div class="col-lbl">Corong Kelulusan</div>
           ${tbl([
-            { label: 'Jumlah Permohonan', value: total, color: '#6366f1' },
+            { label: 'Jumlah Permohonan', value: total, color: '${COLORS.textSecondary}' },
             { label: 'Diluluskan', value: approved, color: '#10b981' },
             { label: 'Ditolak', value: rejected, color: '#ef4444' },
             { label: 'Menunggu', value: pending, color: '#f59e0b' },
@@ -511,13 +511,14 @@ export default function AdminAnalyticsScreen({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={ms.safe}>
-      {/* Header */}
-      <View style={ms.hdr}>
-        <View style={{ width: 16 }} />
-        <View style={{ flex: 1 }}>
-          <Text style={ms.hdrTitle}>Analitik</Text>
-        </View>
+    <ImageBackground source={require('../../assets/bg_general.jpg')} style={ms.backgroundImage} resizeMode="cover">
+      <SafeAreaView style={ms.safe}>
+        {/* Header */}
+        <View style={ms.hdr}>
+          <View style={{ width: 16 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={ms.hdrTitle}>Analitik</Text>
+          </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity onPress={handleExportExcel} style={[ms.printBtn, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
             <Feather name="file-text" size={14} color="#16a34a" />
@@ -534,11 +535,11 @@ export default function AdminAnalyticsScreen({ navigation }) {
 
         {/* ── Summary Banner ─── */}
         <View style={ms.banner}>
-          <View style={[ms.bannerStat, { borderRightWidth: 1, borderRightColor: '#4f46e5' }]}>
+          <View style={[ms.bannerStat, { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.3)' }]}>
             <Text style={ms.bannerNum}>{total}</Text>
             <Text style={ms.bannerLbl}>Permohonan</Text>
           </View>
-          <View style={[ms.bannerStat, { borderRightWidth: 1, borderRightColor: '#4f46e5' }]}>
+          <View style={[ms.bannerStat, { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.3)' }]}>
             <Text style={ms.bannerNum}>{totalUsers}</Text>
             <Text style={ms.bannerLbl}>Pengguna</Text>
           </View>
@@ -549,11 +550,11 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </View>
 
         {/* ── 1. Pengguna ─────────────────────────── */}
-        <Section title="Pengurusan Pengguna" icon="users" color="#6366f1">
+        <Section title="Pengurusan Pengguna" icon="users" color={COLORS.textSecondary}>
           <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-            <BigStat value={totalUsers} label="Berdaftar" icon="users" color="#6366f1" bg="#eef2ff" />
+            <BigStat value={totalUsers} label="Berdaftar" icon="users" color={COLORS.textSecondary} bg="rgba(254, 249, 195, 0.3)" />
             <BigStat value={activeMonthly} label="Aktif Bulan Ini" icon="activity" color={COLORS.success} bg="#ecfdf5" />
-            <BigStat value={apps.filter(a => a.userId || a.email).length} label="Pemohon" icon="file-text" color="#f59e0b" bg="#fffbeb" />
+            <BigStat value={apps.filter(a => a.userId || a.email).length} label="Pemohon" icon="file-text" color={COLORS.primaryDark} bg="#fffbeb" />
           </View>
           <Divider />
           <CLabel text="Pendaftaran 6 Bulan Terakhir" />
@@ -563,7 +564,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </Section>
 
         {/* ── 2. Kempen ───────────────────────────── */}
-        <Section title="Analitik Kempen" icon="trending-up" color="#3b82f6">
+        <Section title="Analitik Kempen" icon="trending-up" color={COLORS.textMuted}>
           <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
             <BigStat value={approved} label="Diluluskan" icon="check-circle" color={COLORS.success} bg="#ecfdf5" />
             <BigStat value={rejected} label="Ditolak" icon="x-circle" color={COLORS.error} bg="#fef2f2" />
@@ -588,7 +589,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </Section>
 
         {/* ── 3. Kewangan ─────────────────────────── */}
-        <Section title="Analitik Kewangan" icon="dollar-sign" color="#10b981">
+        <Section title="Analitik Kewangan" icon="dollar-sign" color={COLORS.primaryDark}>
           <View style={ms.finBanner}>
             <View style={ms.finCard}>
               <Text style={ms.finAmt}>RM {Math.round(totalTarget).toLocaleString('ms-MY')}</Text>
@@ -617,15 +618,15 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </Section>
 
         {/* ── 4. Kelulusan Funnel ──────────────────── */}
-        <Section title="Analitik Kelulusan Permohonan" icon="filter" color="#f59e0b">
+        <Section title="Analitik Kelulusan Permohonan" icon="filter" color={COLORS.primary}>
           <CLabel text="Corong Kelulusan" />
           <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
             <FunnelChart steps={[
-              { label: '📋 Jumlah Permohonan', value: total, color: '#6366f1' },
+              { label: '📋 Jumlah Permohonan', value: total, color: COLORS.textSecondary },
               { label: '✅ Diluluskan', value: approved, color: COLORS.success },
               { label: '❌ Ditolak', value: rejected, color: COLORS.error },
-              { label: '⏳ Menunggu', value: pending, color: '#f59e0b' },
-              { label: '🟢 Aktif & Diterbit', value: active, color: '#0ea5e9' },
+              { label: '⏳ Menunggu', value: pending, color: COLORS.primary },
+              { label: '🟢 Aktif & Diterbit', value: active, color: COLORS.textMuted },
             ]} />
           </View>
           <Divider />
@@ -634,7 +635,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
             slices={[
               { label: 'Lulus', value: approved, color: COLORS.success },
               { label: 'Tolak', value: rejected, color: COLORS.error },
-              { label: 'Tunggu', value: pending, color: '#f59e0b' },
+              { label: 'Tunggu', value: pending, color: COLORS.primary },
             ].filter(s => s.value > 0)}
             label="Jumlah"
             total={total}
@@ -642,9 +643,9 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </Section>
 
         {/* ── 5. Tingkah Laku ──────────────────────── */}
-        <Section title="Analitik Skor Kesahihan AI" icon="shield" color="#ec4899">
+        <Section title="Analitik Skor Kesahihan AI" icon="shield" color={COLORS.secondary}>
           <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 12 }}>
-            <BigStat value={`${avgScore}%`} label="Purata Skor" icon="award" color="#8b5cf6" bg="#f5f3ff" />
+            <BigStat value={`${avgScore}%`} label="Purata Skor" icon="award" color={COLORS.textSecondary} bg="rgba(254, 249, 195, 0.3)" />
             <BigStat value={highScore} label="Skor Tinggi" icon="check-circle" color={COLORS.success} bg="#ecfdf5" />
             <BigStat value={lowScore} label="Skor Rendah" icon="alert-triangle" color={COLORS.error} bg="#fef2f2" />
           </View>
@@ -671,7 +672,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
         </Section>
 
         {/* ── 6. Keselamatan ───────────────────────── */}
-        <Section title="Keselamatan & Moderasi" icon="shield" color="#ef4444">
+        <Section title="Keselamatan & Moderasi" icon="shield" color={COLORS.error}>
           <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
             {highRisk > 0 && (
               <View style={ms.alert}>
@@ -691,7 +692,7 @@ export default function AdminAnalyticsScreen({ navigation }) {
           <DonutChart
             slices={[
               { label: 'Selamat (AI Tinggi)', value: highScore, color: COLORS.success },
-              { label: 'Sederhana', value: medScore, color: '#f59e0b' },
+              { label: 'Sederhana', value: medScore, color: COLORS.primary },
               { label: 'Berisiko Tinggi', value: highRisk, color: COLORS.error },
             ].filter(s => s.value > 0)}
             label="Risiko"
@@ -702,9 +703,9 @@ export default function AdminAnalyticsScreen({ navigation }) {
           <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
             <HBarChart data={[
               { label: '🟢 Disahkan AI (≥80%)', value: highScore, color: COLORS.success },
-              { label: '🟡 Perlu Semak Manual', value: medScore, color: '#f59e0b' },
+              { label: '🟡 Perlu Semak Manual', value: medScore, color: COLORS.primary },
               { label: '🔴 Berisiko Tinggi', value: highRisk, color: COLORS.error },
-              { label: '⏳ Tunggu >7 Hari', value: longPending, color: '#64748b' },
+              { label: '⏳ Tunggu >7 Hari', value: longPending, color: COLORS.textSecondary },
             ]} />
           </View>
         </Section>
@@ -712,35 +713,37 @@ export default function AdminAnalyticsScreen({ navigation }) {
         <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
+  </ImageBackground>
   );
 }
 
 const ms = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: COLORS.background },
+  safe: { flex: 1, backgroundColor: 'transparent' },
+  backgroundImage: { flex: 1, width: '100%', height: '100%' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   hdr: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: COLORS.background, borderBottomWidth: 1, borderBottomColor: '#e2e8f0',
+    backgroundColor: 'transparent', borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
   },
   backBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.4)', justifyContent: 'center', alignItems: 'center' },
   hdrTitle: { fontSize: 17, fontWeight: '800', color: COLORS.text },
   hdrSub: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
-  printBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#eef2ff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#e0e7ff' },
-  printText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  printBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: COLORS.borderLight },
+  printText: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary },
   scroll: { padding: 14 },
   banner: {
-    flexDirection: 'row', backgroundColor: '#4f46e5', borderRadius: 18,
+    flexDirection: 'row', backgroundColor: COLORS.textMuted, borderRadius: 18,
     marginBottom: 14, overflow: 'hidden',
-    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    shadowColor: COLORS.textMuted, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
   bannerStat: { flex: 1, alignItems: 'center', paddingVertical: 18 },
   bannerNum: { fontSize: 28, fontWeight: '900', color: '#fff' },
   bannerLbl: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2, fontWeight: '600' },
   finBanner: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12 },
-  finCard: { flex: 1, backgroundColor: '#eff6ff', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#bfdbfe' },
+  finCard: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.85)', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: COLORS.borderLight },
   finAmt: { fontSize: 16, fontWeight: '900', color: COLORS.primary },
-  finLbl: { fontSize: 10, color: COLORS.textMuted, marginTop: 4, textAlign: 'center', fontWeight: '600' },
+  finLbl: { fontSize: 10, color: COLORS.textSecondary, marginTop: 4, textAlign: 'center', fontWeight: '600' },
   alert: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca',

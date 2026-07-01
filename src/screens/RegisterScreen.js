@@ -57,7 +57,7 @@ export default function RegisterScreen({ navigation }) {
 
   const fields = [
     { label: 'Nama Penuh', icon: 'user', value: nama, setter: setNama, placeholder: 'Ali bin Abu', type: 'default' },
-    { label: 'Alamat Emel', icon: 'mail', value: emel, setter: setEmel, placeholder: 'ali@example.com', type: 'email-address' },
+    { label: 'Alamat Emel', icon: 'mail', value: emel, setter: setEmel, placeholder: 'ali@gmail.com', type: 'email-address' },
     { label: 'Nombor Telefon', icon: 'smartphone', value: telefon, setter: setTelefon, placeholder: '012-3456789', type: 'phone-pad' },
   ];
 
@@ -66,91 +66,91 @@ export default function RegisterScreen({ navigation }) {
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Back Button */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            </TouchableOpacity>
 
-          {/* Header */}
-          <View style={styles.headerIcon}>
-            <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
-          </View>
-          <Text style={styles.title}>Daftar Akaun Baru</Text>
-          <Text style={styles.subtitle}>Sila isi maklumat anda untuk bermula.</Text>
-
-          {/* Error / Success */}
-          {error ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color={COLORS.error} />
-              <Text style={styles.errorText}>{error}</Text>
+            {/* Header */}
+            <View style={styles.headerIcon}>
+              <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
             </View>
-          ) : null}
-          {success ? (
-            <View style={[styles.errorBox, { backgroundColor: COLORS.successBg, borderColor: '#a7f3d0' }]}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-              <Text style={[styles.errorText, { color: COLORS.success }]}>{success}</Text>
-            </View>
-          ) : null}
+            <Text style={styles.title}>Daftar Akaun Baru</Text>
+            <Text style={styles.subtitle}>Sila isi maklumat anda untuk bermula.</Text>
 
-          {/* Form Fields */}
-          {fields.map((field) => (
-            <View key={field.label}>
-              <Text style={styles.label}>{field.label}</Text>
-              <View style={styles.inputWrapper}>
-                <Feather name={field.icon} size={18} color={COLORS.textMuted} />
-                <TextInput
-                  style={styles.input}
-                  placeholder={field.placeholder}
-                  placeholderTextColor={COLORS.textMuted}
-                  value={field.value}
-                  onChangeText={field.setter}
-                  keyboardType={field.type}
-                  autoCapitalize={field.type === 'email-address' ? 'none' : 'words'}
-                />
+            {/* Error / Success */}
+            {error ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+                <Text style={styles.errorText}>{error}</Text>
               </View>
+            ) : null}
+            {success ? (
+              <View style={[styles.errorBox, { backgroundColor: COLORS.successBg, borderColor: '#a7f3d0' }]}>
+                <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                <Text style={[styles.errorText, { color: COLORS.success }]}>{success}</Text>
+              </View>
+            ) : null}
+
+            {/* Form Fields */}
+            {fields.map((field) => (
+              <View key={field.label}>
+                <Text style={styles.label}>{field.label}</Text>
+                <View style={styles.inputWrapper}>
+                  <Feather name={field.icon} size={18} color={COLORS.textMuted} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={COLORS.textMuted}
+                    value={field.value}
+                    onChangeText={field.setter}
+                    keyboardType={field.type}
+                    autoCapitalize={field.type === 'email-address' ? 'none' : 'words'}
+                  />
+                </View>
+              </View>
+            ))}
+
+            {/* Password */}
+            <Text style={styles.label}>Kata Laluan</Text>
+            <View style={styles.inputWrapper}>
+              <Feather name="lock" size={18} color={COLORS.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="Minimum 6 aksara"
+                placeholderTextColor={COLORS.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
             </View>
-          ))}
 
-          {/* Password */}
-          <Text style={styles.label}>Kata Laluan</Text>
-          <View style={styles.inputWrapper}>
-            <Feather name="lock" size={18} color={COLORS.textMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="Minimum 6 aksara"
-              placeholderTextColor={COLORS.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={COLORS.textMuted} />
+            {/* Register Button */}
+            <TouchableOpacity
+              style={[styles.btnPrimary, (loading || !!success) && { opacity: 0.7 }]}
+              onPress={handleRegister}
+              disabled={loading || !!success}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>
+                {loading ? 'Mendaftar...' : success ? 'Berjaya Didaftar!' : 'Daftar Sekarang'}
+              </Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Register Button */}
-          <TouchableOpacity
-            style={[styles.btnPrimary, (loading || !!success) && { opacity: 0.7 }]}
-            onPress={handleRegister}
-            disabled={loading || !!success}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.btnPrimaryText}>
-              {loading ? 'Mendaftar...' : success ? 'Berjaya Didaftar!' : 'Daftar Sekarang'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Login Link */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Sudah mempunyai akaun? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.footerLink}>Log Masuk</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  </ImageBackground>
+            {/* Login Link */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Sudah mempunyai akaun? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+                <Text style={styles.footerLink}>Log Masuk</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 

@@ -5,11 +5,11 @@ import {
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Video } from 'expo-av';
+
 import { auth, db, storage } from '../firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { COLORS } from '../constants';
+import { COLORS, ADMIN_EMAIL } from '../constants';
 
 const { width } = Dimensions.get('window');
 
@@ -67,7 +67,7 @@ export default function CreateProgressReportScreen({ navigation, route }) {
     try {
       const uid = auth.currentUser.uid;
       const userName = auth.currentUser.displayName || auth.currentUser.email.split('@')[0];
-      const isAdmin = auth.currentUser.email === COLORS.ADMIN_EMAIL;
+      const isAdmin = auth.currentUser.email === ADMIN_EMAIL;
 
       // Helper to get Blob
       const getBlobFromUri = async (uri) => {
@@ -102,6 +102,22 @@ export default function CreateProgressReportScreen({ navigation, route }) {
         isAdminUpdate: isAdmin,
         createdAt: serverTimestamp(),
       });
+
+      // Dispatch notification to application creator if updated by admin
+      if (isAdmin && appData && appData.userId) {
+        try {
+          await addDoc(collection(db, 'notifications'), {
+            userId: appData.userId,
+            title: 'Perkembangan Baharu Kempen',
+            body: `Pentadbir MyDana telah memuat naik perkembangan baharu untuk kempen anda: "${appData.summary?.tajuk || 'Kempen Anda'}".`,
+            createdAt: serverTimestamp(),
+            read: false,
+            campaignId: appId,
+          });
+        } catch (err) {
+          console.error("Gagal menghantar notifikasi kepada pemohon:", err);
+        }
+      }
 
       Alert.alert('Berjaya!', 'Laporan perkembangan telah dimuat naik dan boleh dilihat oleh penderma.', [
         { text: 'OK', onPress: () => navigation.goBack() }

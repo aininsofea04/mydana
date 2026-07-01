@@ -120,6 +120,7 @@ export default function App() {
               <Stack.Screen name="AdminTabs" component={AdminTabs} />
               <Stack.Screen name="AdminDetail" component={AdminDetailScreen} />
               <Stack.Screen name="CreateProgressReport" component={CreateProgressReportScreen} />
+              <Stack.Screen name="UserProfile" component={ProfileScreen} />
             </>
           ) : (
             <>
@@ -131,6 +132,7 @@ export default function App() {
               <Stack.Screen name="DirectMessage" component={DirectMessageScreen} />
               <Stack.Screen name="CreateProgressReport" component={CreateProgressReportScreen} />
               <Stack.Screen name="LiveStream" component={LiveStreamScreen} />
+              <Stack.Screen name="UserProfile" component={ProfileScreen} />
             </>
           )}
         </Stack.Navigator>

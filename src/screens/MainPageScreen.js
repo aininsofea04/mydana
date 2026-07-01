@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList,
   Dimensions, Image, ActivityIndicator, StatusBar, Share, Alert,
-  Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView
+  Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView,
+  Animated, PanResponder
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
@@ -11,7 +12,7 @@ import { db, auth } from '../firebase';
 import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, setDoc, arrayUnion, arrayRemove, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { COLORS } from '../constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Audio } from 'expo-av';
+
 import { useVideoPlayer, VideoView } from 'expo-video';
 import Loading from './Loading';
 
@@ -58,7 +59,42 @@ const CATEGORY_IMAGES = {
   'Permohonan Bantuan': 'https://images.unsplash.com/photo-1469571486292-0ba58a3f068b?w=800&q=80',
 };
 
-const CommentItem = ({ item, onReply, onLike, isReply, parentId }) => {
+const formatCommentTime = (createdAt, replyId) => {
+  let dateObj = null;
+
+  if (createdAt?.toDate) {
+    dateObj = createdAt.toDate();
+  } else if (createdAt instanceof Date) {
+    dateObj = createdAt;
+  } else if (typeof createdAt === 'number') {
+    dateObj = new Date(createdAt);
+  } else if (replyId && !isNaN(parseInt(replyId))) {
+    dateObj = new Date(parseInt(replyId));
+  }
+
+  if (!dateObj) return 'Baru sahaja';
+
+  const now = new Date();
+  const diffMs = now.getTime() - dateObj.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSecs < 60) {
+    return 'Baru sahaja';
+  } else if (diffMins < 60) {
+    return `${diffMins} min lepas`;
+  } else if (diffHours < 24) {
+    return `${diffHours} jam lepas`;
+  } else if (diffDays < 7) {
+    return `${diffDays} hari lepas`;
+  } else {
+    return dateObj.toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+};
+
+const CommentItem = ({ item, onReply, onLike, isReply, parentId, onNavigateToProfile }) => {
   const [commenter, setCommenter] = useState(null);
   const currentUser = auth.currentUser;
 
@@ -76,16 +112,25 @@ const CommentItem = ({ item, onReply, onLike, isReply, parentId }) => {
   const defaultAvatar = 'https://static.vecteezy.com/system/resources/previews/009/734/564/non_2x/default-avatar-profile-icon-of-social-media-user-vector.jpg';
   const displayPhoto = commenter?.photoURL || item.userPhoto || defaultAvatar;
 
+  const handleProfilePress = () => {
+    const idToUse = item.userId || (item.user === currentUser?.email ? currentUser.uid : null);
+    if (idToUse && onNavigateToProfile) {
+      onNavigateToProfile(idToUse);
+    }
+  };
+
   return (
     <View style={[styles.commentItem, isReply && styles.replyWrapper]}>
-      <View style={[styles.commentAvatar, isReply && styles.replyAvatar]}>
+      <TouchableOpacity onPress={handleProfilePress} style={[styles.commentAvatar, isReply && styles.replyAvatar]}>
         <Image source={{ uri: displayPhoto }} style={styles.commentAvatarImage} />
-      </View>
+      </TouchableOpacity>
       <View style={styles.commentBody}>
-        <Text style={styles.commentUser}>{displayName.startsWith('@') ? displayName : `@${displayName.split('@')[0]}`}</Text>
+        <TouchableOpacity onPress={handleProfilePress}>
+          <Text style={styles.commentUser}>{displayName.startsWith('@') ? displayName : `@${displayName.split('@')[0]}`}</Text>
+        </TouchableOpacity>
         <Text style={styles.commentText}>{item.text}</Text>
         <View style={styles.commentActions}>
-          <Text style={styles.commentTime}>Baru sahaja</Text>
+          <Text style={styles.commentTime}>{formatCommentTime(item.createdAt, isReply ? item.id : null)}</Text>
           {!isReply && onReply && (
             <TouchableOpacity onPress={() => onReply(item)}>
               <Text style={styles.replyText}>Balas</Text>
@@ -103,7 +148,7 @@ const CommentItem = ({ item, onReply, onLike, isReply, parentId }) => {
   );
 };
 
-const CommentsModal = ({ visible, onClose, campaign, comments, commentText, setCommentText, onSend, onLike, onReply, replyingTo, cancelReply }) => (
+const CommentsModal = ({ visible, onClose, campaign, comments, commentText, setCommentText, onSend, onLike, onReply, replyingTo, cancelReply, onNavigateToProfile }) => (
   <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
       <TouchableOpacity style={styles.modalBackdrop} onPress={onClose} activeOpacity={1} />
@@ -121,9 +166,9 @@ const CommentsModal = ({ visible, onClose, campaign, comments, commentText, setC
           contentContainerStyle={{ padding: 16 }}
           renderItem={({ item }) => (
             <View style={styles.commentWrapper}>
-              <CommentItem item={item} onReply={onReply} onLike={onLike} />
+              <CommentItem item={item} onReply={onReply} onLike={onLike} onNavigateToProfile={onNavigateToProfile} />
               {item.replies && item.replies.map(reply => (
-                <CommentItem key={reply.id} item={reply} isReply={true} parentId={item.id} onLike={onLike} />
+                <CommentItem key={reply.id} item={reply} isReply={true} parentId={item.id} onLike={onLike} onNavigateToProfile={onNavigateToProfile} />
               ))}
             </View>
           )}
@@ -270,7 +315,7 @@ const VideoSlide = ({ uri, isMuted, isScreenFocused, isCurrent, isSlideActive, s
   );
 };
 
-const ProgressTimeline = ({ appId }) => {
+const ProgressTimeline = ({ appId, applicant, applicantId, navigation }) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewMedia, setPreviewMedia] = useState(null);
@@ -298,39 +343,73 @@ const ProgressTimeline = ({ appId }) => {
 
   return (
     <View style={{ gap: 16 }}>
-      {reports.map((r, i) => (
-        <View key={r.id} style={[styles.progressReportCard, r.isAdminUpdate && styles.adminReportCard]}>
-          <View style={styles.reportHeader}>
-            <View style={[styles.reportDot, r.isAdminUpdate && { backgroundColor: COLORS.primary }]} />
-            <Text style={styles.reportDate}>{r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru sahaja'}</Text>
-            {r.isAdminUpdate && (
-              <View style={styles.adminBadge}>
-                <Ionicons name="shield-checkmark" size={10} color="#fff" />
-                <Text style={styles.adminBadgeText}>INFO RASMI ADMIN</Text>
+      {reports.map((r, i) => {
+        const isReportAdmin = r.isAdminUpdate || (applicantId && r.userId !== applicantId);
+        return (
+          <View key={r.id} style={[styles.progressReportCard, isReportAdmin && styles.adminReportCard]}>
+            <View style={styles.reportProfileHeader}>
+              <Image
+                source={
+                  isReportAdmin
+                    ? require('../../assets/logo.png')
+                    : (applicant?.photoURL 
+                        ? { uri: applicant.photoURL } 
+                        : { uri: 'https://static.vecteezy.com/system/resources/previews/009/734/564/non_2x/default-avatar-profile-icon-of-social-media-user-vector.jpg' })
+                }
+                style={styles.reportAvatar}
+              />
+              <View style={{ flex: 1 }}>
+                <TouchableOpacity
+                  disabled={isReportAdmin}
+                  onPress={() => {
+                    const idToUse = applicant?.userId || applicant?.uid || applicant?.id || applicantId;
+                    if (idToUse) {
+                      navigation.navigate('UserProfile', { userId: idToUse });
+                    }
+                  }}
+                >
+                  <Text style={styles.reportProfileName}>
+                    {isReportAdmin ? 'Pentadbir MyDana' : (applicant?.nama || r.userName || 'Penganjur')}
+                  </Text>
+                  <Text style={styles.reportProfileUser}>
+                    {isReportAdmin ? '@mydana' : `@${applicant?.username || r.userName || 'penganjur'}`}
+                  </Text>
+                </TouchableOpacity>
               </View>
-            )}
+              {isReportAdmin && (
+                <View style={styles.adminBadge}>
+                  <Ionicons name="shield-checkmark" size={10} color="#fff" />
+                  <Text style={styles.adminBadgeText}>INFO RASMI</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.reportHeader}>
+              <View style={[styles.reportDot, isReportAdmin && { backgroundColor: COLORS.primary }]} />
+              <Text style={styles.reportDate}>{r.createdAt?.toDate ? r.createdAt.toDate().toLocaleDateString('ms-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Baru sahaja'}</Text>
+            </View>
+            <View style={[styles.reportContent, isReportAdmin && styles.adminReportContent]}>
+              <Text style={[styles.reportText, isReportAdmin && { color: '#1e3a8a', fontWeight: '500' }]}>{r.text}</Text>
+              {r.media && r.media.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reportMediaRow}>
+                  {r.media.map((m, idx) => (
+                    <TouchableOpacity key={idx} style={styles.reportMediaItem} onPress={() => setPreviewMedia(m)}>
+                      {m.type === 'video' ? (
+                        <View style={styles.reportVideoPlaceholder}>
+                          <Ionicons name="play-circle" size={24} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>VIDEO</Text>
+                        </View>
+                      ) : (
+                        <Image source={{ uri: m.url }} style={styles.reportImage} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
           </View>
-          <View style={[styles.reportContent, r.isAdminUpdate && styles.adminReportContent]}>
-            <Text style={[styles.reportText, r.isAdminUpdate && { color: '#1e3a8a', fontWeight: '500' }]}>{r.text}</Text>
-            {r.media && r.media.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reportMediaRow}>
-                {r.media.map((m, idx) => (
-                  <TouchableOpacity key={idx} style={styles.reportMediaItem} onPress={() => setPreviewMedia(m)}>
-                    {m.type === 'video' ? (
-                      <View style={styles.reportVideoPlaceholder}>
-                        <Ionicons name="play-circle" size={24} color="#fff" />
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>VIDEO</Text>
-                      </View>
-                    ) : (
-                      <Image source={{ uri: m.url }} style={styles.reportImage} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      ))}
+        );
+      })}
 
       <MediaPreviewModal
         visible={!!previewMedia}
@@ -369,6 +448,13 @@ const MediaPreviewModal = ({ visible, media, onClose }) => {
 
 const InfoModal = ({ visible, onClose, campaign, navigation }) => {
   const [applicant, setApplicant] = useState(null);
+  const panY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      panY.setValue(0);
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (!campaign) return;
@@ -378,6 +464,39 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
     });
     return unsub;
   }, [campaign]);
+
+  const resetPositionAnim = Animated.timing(panY, {
+    toValue: 0,
+    duration: 250,
+    useNativeDriver: true,
+  });
+
+  const closeAnim = Animated.timing(panY, {
+    toValue: height,
+    duration: 250,
+    useNativeDriver: true,
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (evt, gestureState) => {
+        if (gestureState.dy > 0) {
+          panY.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.5) {
+          closeAnim.start(() => {
+            onClose();
+          });
+        } else {
+          resetPositionAnim.start();
+        }
+      },
+    })
+  ).current;
 
   if (!campaign) return null;
   const feed = campaign.feed || {};
@@ -391,13 +510,25 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.modalContainer}>
         <TouchableOpacity style={styles.modalBackdrop} onPress={onClose} activeOpacity={1} />
-        <View style={styles.infoModalContent}>
-          <View style={styles.infoModalDragBar} />
+        <Animated.View style={[styles.infoModalContent, { transform: [{ translateY: panY }] }]}>
+          <View {...panResponder.panHandlers} style={styles.dragArea}>
+            <View style={styles.infoModalDragBar} />
+            <Text style={[styles.infoModalTitle, { paddingHorizontal: 20, marginTop: 4, marginBottom: 8 }]}>
+              {campaign.summary?.tajuk || 'Kempen MyDana'}
+            </Text>
+          </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20 }}>
-            <Text style={styles.infoModalTitle}>{campaign.summary?.tajuk || 'Kempen MyDana'}</Text>
-
-            <View style={styles.infoApplicantRow}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 120 }}>
+            <TouchableOpacity 
+              style={styles.infoApplicantRow} 
+              onPress={() => {
+                onClose();
+                const idToUse = campaign.userId || campaign.uid || campaign.id;
+                if (idToUse) {
+                  navigation.navigate('UserProfile', { userId: idToUse });
+                }
+              }}
+            >
               <View style={styles.infoAvatar}>
                 {applicant?.photoURL ? (
                   <Image source={{ uri: applicant.photoURL }} style={styles.avatarMiniImage} />
@@ -409,7 +540,7 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
                 <Text style={styles.infoApplicantName}>{applicant?.nama || campaign.name}</Text>
                 <Text style={styles.infoApplicantSub}>@{applicant?.username || campaign.name?.toLowerCase().replace(/\s/g, '')} • Disahkan ✅</Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
             <View style={styles.infoProgressBox}>
               <Text style={styles.infoProgressTitle}>Dana Terkumpul</Text>
@@ -427,7 +558,7 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
             </Text>
 
             <Text style={styles.infoSectionTitle}>Laporan Perkembangan</Text>
-            <ProgressTimeline appId={campaign.id} />
+            <ProgressTimeline appId={campaign.id} applicant={applicant} applicantId={campaign.userId || campaign.uid || campaign.id} navigation={navigation} />
 
             <View style={{ height: 100 }} />
           </ScrollView>
@@ -443,7 +574,7 @@ const InfoModal = ({ visible, onClose, campaign, navigation }) => {
               <Text style={styles.infoDonateBtnText}>Sumbang Sekarang</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -657,7 +788,15 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
         </View>
 
         <View style={styles.bottomContent} pointerEvents="box-none">
-          <View style={styles.applicantRow}>
+          <TouchableOpacity 
+            style={styles.applicantRow} 
+            onPress={() => {
+              const idToUse = item.userId || item.uid || item.id;
+              if (idToUse) {
+                navigation.navigate('UserProfile', { userId: idToUse });
+              }
+            }}
+          >
             <View style={styles.avatarMini}>
               {applicant?.photoURL ? (
                 <Image source={{ uri: applicant.photoURL }} style={styles.avatarMiniImage} />
@@ -669,7 +808,7 @@ const CampaignItem = ({ item, navigation, onOpenComments, onOpenInfo, isScreenFo
             <View style={styles.verifiedBadge}>
               <Ionicons name="checkmark-circle" size={14} color="#3b82f6" />
             </View>
-          </View>
+          </TouchableOpacity>
           <Text style={styles.campaignTitle}>{item.summary?.tajuk || 'Kempen MyDana'}</Text>
 
 
@@ -1080,6 +1219,10 @@ export default function MainPageScreen({ navigation }) {
         onReply={(comment) => setReplyingTo(comment)}
         replyingTo={replyingTo}
         cancelReply={() => setReplyingTo(null)}
+        onNavigateToProfile={(userId) => {
+          setCommentModalVisible(false);
+          navigation.navigate('UserProfile', { userId });
+        }}
       />
     </View>
   );
@@ -1285,9 +1428,17 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   sendButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center' },
-  infoModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: height * 0.85, width: '100%' },
-  infoModalDragBar: { width: 40, height: 5, backgroundColor: '#ddd', borderRadius: 3, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
-  infoModalTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text, marginBottom: 16 },
+  infoModalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: height * 0.85, width: '100%', overflow: 'hidden' },
+  infoModalDragBar: { width: 40, height: 5, backgroundColor: '#ddd', borderRadius: 3, alignSelf: 'center', marginBottom: 4 },
+  infoModalTitle: { fontSize: 22, fontWeight: '800', color: COLORS.text },
+  dragArea: {
+    width: '100%',
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    alignItems: 'stretch',
+  },
   infoApplicantRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#eee' },
   infoAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
   infoAvatarText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
@@ -1308,7 +1459,11 @@ const styles = StyleSheet.create({
   infoModalFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#eee', paddingBottom: Platform.OS === 'ios' ? 34 : 20 },
   infoDonateBtn: { backgroundColor: COLORS.primary, paddingVertical: 16, borderRadius: 16, alignItems: 'center', shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   infoDonateBtnText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  progressReportCard: { borderLeftWidth: 2, borderLeftColor: COLORS.primary, paddingLeft: 16, marginBottom: 4 },
+  progressReportCard: { borderLeftWidth: 2, borderLeftColor: COLORS.primary, paddingLeft: 16, marginBottom: 20 },
+  reportProfileHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10, marginTop: 4 },
+  reportAvatar: { width: 32, height: 32, borderRadius: 16 },
+  reportProfileName: { fontSize: 13, fontWeight: '700', color: COLORS.text },
+  reportProfileUser: { fontSize: 11, color: COLORS.textMuted },
   reportHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   reportDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary, marginLeft: -21 },
   reportDate: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted },

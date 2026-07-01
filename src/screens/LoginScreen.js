@@ -4,8 +4,9 @@ import {
   ScrollView, KeyboardAvoidingView, Platform, Alert, Image, ImageBackground
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { COLORS } from '../constants';
 
 export default function LoginScreen({ navigation }) {
@@ -40,6 +41,54 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
+  const handleForgotPassword = async () => {
+    setError('');
+    const emailTrimmed = emel.trim();
+    if (!emailTrimmed) {
+      Alert.alert('Info Diperlukan', 'Sila masukkan alamat e-mel anda terlebih dahulu untuk menetapkan semula kata laluan.');
+      return;
+    }
+    setLoading(true);
+    try {
+      // Semak sama ada e-mel wujud di Firestore (users collection)
+      const q = query(collection(db, 'users'), where('emel', '==', emailTrimmed));
+      const snap = await getDocs(q);
+      
+      let isRegistered = !snap.empty || emailTrimmed.toLowerCase() === 'admin@admin.com';
+      
+      if (!isRegistered) {
+        // Semakan sandaran jika huruf besar/kecil tidak sepadan
+        const allUsersSnap = await getDocs(collection(db, 'users'));
+        allUsersSnap.forEach(d => {
+          const uData = d.data();
+          if (uData.emel && uData.emel.trim().toLowerCase() === emailTrimmed.toLowerCase()) {
+            isRegistered = true;
+          }
+        });
+      }
+
+      if (!isRegistered) {
+        setError('Emel ini belum didaftarkan.');
+        Alert.alert('Ralat', 'Alamat e-mel ini belum didaftarkan dalam sistem MyDana.');
+        setLoading(false);
+        return;
+      }
+
+      await sendPasswordResetEmail(auth, emailTrimmed);
+      Alert.alert('E-mel Dihantar', `Pautan untuk menetapkan semula kata laluan telah dihantar ke e-mel: ${emailTrimmed}`);
+    } catch (err) {
+      if (err.code === 'auth/invalid-email') {
+        setError('Format alamat e-mel tidak sah.');
+      } else if (err.code === 'auth/user-not-found') {
+        setError('Tiada akaun dijumpai dengan e-mel ini.');
+      } else {
+        setError(`Gagal menghantar e-mel set semula: ${err.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ImageBackground source={require('../../assets/bg_general.jpg')} style={styles.backgroundImage} resizeMode="cover">
       <SafeAreaView style={styles.safe}>
@@ -48,83 +97,98 @@ export default function LoginScreen({ navigation }) {
           style={{ flex: 1 }}
         >
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Back Button */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-          </TouchableOpacity>
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            </TouchableOpacity>
 
-          {/* Top Illustration */}
-          <View style={styles.illustration}>
-            <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
-          </View>
-
-          {/* Header */}
-          <Text style={styles.title}>Selamat Datang ke MyDana</Text>
-          <Text style={styles.subtitle}>Sila masukkan butiran anda untuk mengakses akaun.</Text>
-
-          {/* Error */}
-          {error ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color={COLORS.error} />
-              <Text style={styles.errorText}>{error}</Text>
+            {/* Top Illustration */}
+            <View style={styles.illustration}>
+              <Image source={require('../../assets/logo.png')} style={styles.logoImg} />
             </View>
-          ) : null}
 
-          {/* Email Field */}
-          <Text style={styles.label}>Alamat E-mel</Text>
-          <View style={styles.inputWrapper}>
-            <Feather name="mail" size={18} color={COLORS.textMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="contoh@email.com"
-              placeholderTextColor={COLORS.textMuted}
-              value={emel}
-              onChangeText={setEmel}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
+            {/* Header */}
+            <Text style={styles.title}>Selamat Datang ke MyDana</Text>
+            <Text style={styles.subtitle}>Sila masukkan butiran anda untuk mengakses akaun.</Text>
 
-          {/* Password Field */}
-          <Text style={styles.label}>Kata Laluan</Text>
-          <View style={styles.inputWrapper}>
-            <Feather name="lock" size={18} color={COLORS.textMuted} />
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={COLORS.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={COLORS.textMuted} />
+            {/* Error */}
+            {error ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Email Field */}
+            <Text style={styles.label}>Alamat E-mel</Text>
+            <View style={styles.inputWrapper}>
+              <Feather name="mail" size={18} color={COLORS.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="ali@email.com"
+                placeholderTextColor={COLORS.textMuted}
+                value={emel}
+                onChangeText={(val) => {
+                  setEmel(val);
+                  setError('');
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            {/* Password Field */}
+            <Text style={styles.label}>Kata Laluan</Text>
+            <View style={styles.inputWrapper}>
+              <Feather name="lock" size={18} color={COLORS.textMuted} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={COLORS.textMuted}
+                value={password}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  setError('');
+                }}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                <Feather name={showPassword ? 'eye-off' : 'eye'} size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Forgot Password */}
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={handleForgotPassword}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.forgotBtnText}>Lupa kata laluan?</Text>
             </TouchableOpacity>
-          </View>
 
-          {/* Login Button */}
-          <TouchableOpacity
-            style={[styles.btnPrimary, loading && { opacity: 0.7 }]}
-            onPress={handleLogin}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.btnPrimaryText}>
-              {loading ? 'Sila tunggu...' : 'Log Masuk'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Register Link */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Belum mempunyai akaun? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.footerLink}>Daftar sekarang</Text>
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[styles.btnPrimary, loading && { opacity: 0.7 }]}
+              onPress={handleLogin}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnPrimaryText}>
+                {loading ? 'Sila tunggu...' : 'Log Masuk'}
+              </Text>
             </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  </ImageBackground>
+
+            {/* Register Link */}
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Belum mempunyai akaun? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                <Text style={styles.footerLink}>Daftar sekarang</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
@@ -165,4 +229,6 @@ const styles = StyleSheet.create({
   },
   footerText: { color: COLORS.textSecondary, fontSize: 14 },
   footerLink: { color: COLORS.primary, fontSize: 14, fontWeight: '700' },
+  forgotBtn: { alignSelf: 'center', marginBottom: 20, marginTop: -8 },
+  forgotBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
 });
